@@ -2,7 +2,10 @@ module github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer
 
 go 1.24.5
 
-require github.com/crowdsecurity/go-cs-bouncer v0.0.17-0.20250708125915-2ee9e98dab3c
+require (
+	github.com/crowdsecurity/go-cs-bouncer v0.0.17-0.20250708125915-2ee9e98dab3c
+	gopkg.in/yaml.v2 v2.4.0
+)
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2 // indirect
@@ -43,6 +46,5 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

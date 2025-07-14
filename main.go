@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"os"
@@ -183,7 +184,7 @@ func RenderDebugUI(w http.ResponseWriter, r *http.Request) {
 	for _, name := range headerKeys {
 		values := r.Header[name]
 		for _, value := range values {
-			fmt.Fprintf(w, "%s: %s\n", name, value)
+			fmt.Fprintf(w, "%s: %s\n", name, html.EscapeString(value))
 		}
 	}
 	w.Header().Set("Content-Type", "text/html")
