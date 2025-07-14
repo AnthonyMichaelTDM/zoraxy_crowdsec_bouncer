@@ -5,6 +5,7 @@ import (
 	"html"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -51,9 +52,12 @@ func (p *PluginUiDebugRouter) populateCSRFToken(r *http.Request, fsHandler http.
 		if strings.HasSuffix(r.URL.Path, ".html") {
 			//Read the target file from file system
 			targetFilePath := strings.TrimPrefix(r.URL.Path, "/")
-			targetFilePath = p.TargetDir + "/" + targetFilePath
-			targetFilePath = strings.TrimPrefix(targetFilePath, "/")
-			targetFileContent, err := os.ReadFile(targetFilePath)
+			absPath, err := filepath.Abs(filepath.Join(p.TargetDir, targetFilePath))
+			if err != nil || !strings.HasPrefix(absPath, p.TargetDir) {
+				http.Error(w, "Invalid file path", http.StatusBadRequest)
+				return
+			}
+			targetFileContent, err := os.ReadFile(absPath)
 			if err != nil {
 				http.Error(w, "File not found", http.StatusNotFound)
 				return
@@ -68,11 +72,15 @@ func (p *PluginUiDebugRouter) populateCSRFToken(r *http.Request, fsHandler http.
 			//Check if the request is for a directory
 			//Check if the directory has an index.html file
 			targetFilePath := strings.TrimPrefix(r.URL.Path, "/")
-			targetFilePath = p.TargetDir + "/" + targetFilePath + "index.html"
-			targetFilePath = strings.TrimPrefix(targetFilePath, "/")
-			if _, err := os.Stat(targetFilePath); err == nil {
+			// block path traversal
+			absPath, err := filepath.Abs(filepath.Join(p.TargetDir, targetFilePath, "index.html"))
+			if err != nil || !strings.HasPrefix(absPath, p.TargetDir) {
+				http.Error(w, "Invalid file path", http.StatusBadRequest)
+				return
+			}
+			if _, err := os.Stat(absPath); err == nil {
 				//Serve the index.html file
-				targetFileContent, err := os.ReadFile(targetFilePath)
+				targetFileContent, err := os.ReadFile(absPath)
 				if err != nil {
 					http.Error(w, "File not found", http.StatusNotFound)
 					return
