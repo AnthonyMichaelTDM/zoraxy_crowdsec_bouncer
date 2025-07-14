@@ -3,6 +3,7 @@ package zoraxy_plugin
 import (
 	"embed"
 	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -54,6 +55,7 @@ func (p *PluginUiRouter) populateCSRFToken(r *http.Request, fsHandler http.Handl
 	if csrfToken == "" {
 		csrfToken = "missing-csrf-token"
 	}
+	csrfToken = html.EscapeString(csrfToken) // Escape the CSRF token to prevent XSS attacks
 
 	//Return the middleware
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
