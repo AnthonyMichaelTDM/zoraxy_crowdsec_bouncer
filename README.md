@@ -21,12 +21,29 @@ cd /opt/zoraxy/plugins
 git clone https://github.com/AnthonyMichaelTDM/zoraxy-crowdsec-bouncer.git
 
 cd zoraxy-crowdsec-bouncer
-go build -o zoraxy_crowdsec_bouncer
-chmod +x zoraxy_crowdsec_bouncer
+go build -o zoraxy_crowdsec_bouncer.so
+chmod +x zoraxy_crowdsec_bouncer.so
 ```
 
 <https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
 
 ## Configuration
 
-WIP, but preferably will be done via a web interface and persisted to a configuration file (e.g. `config.yaml`).
+TODO: implement a way to configure the bouncer via the web UI.
+
+in the same directory as the plugin, there should be a `config.yaml` file with some default configuration. Fill in the values as needed.
+
+```yaml
+api_key: YOUR_API_KEY
+agent_url: http://127.0.0.1:8080 # for example
+debug: false
+```
+
+You can get the API key by running the following command:
+
+```bash
+sudo cscli bouncers add zoraxy-crowdsec-bouncer
+```
+
+
+

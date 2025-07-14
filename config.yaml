@@ -1,0 +1,3 @@
+api_key: <CROWDSEC_BOUNCER_API_KEY>
+agent_url: <CROWDSEC_AGENT_HOST>
+debug: false
