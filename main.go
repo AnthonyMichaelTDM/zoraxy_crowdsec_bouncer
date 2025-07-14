@@ -167,9 +167,13 @@ func CaptureHandler(config *PluginConfig, w http.ResponseWriter, r *http.Request
 		fmt.Println("Dynamic capture handler called for request:", r.RequestURI)
 	}
 
+	// it would be really funny if we could return a 5 petabyte zip bomb or something,
+	// but let's not...
+
 	w.WriteHeader(http.StatusForbidden)
+	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("Forbidden"))
-	fmt.Println("Request forbidden:", r.RequestURI)
+	fmt.Println("Request forbidden: ", r.RequestURI)
 }
 
 // Render the debug UI
