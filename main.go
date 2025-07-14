@@ -20,7 +20,6 @@ const (
 	DYNAMIC_CAPTURE_INGRESS = "/d_capture"
 	DYNAMIC_CAPTURE_SNIFF   = "/d_sniff"
 	CONFIGURATION_FILE      = "./config.yaml"
-	DEBUG                   = false // Set to true to enable debug mode, which will print debug information to the console
 )
 
 type PluginConfig struct {
@@ -105,9 +104,11 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		return SniffHandler(dsfr, bouncer)
+		return SniffHandler(config, dsfr, bouncer)
 	})
-	pathRouter.RegisterDynamicCaptureHandle(DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, CaptureHandler)
+	pathRouter.RegisterDynamicCaptureHandle(DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
+		CaptureHandler(config, w, r)
+	})
 	http.HandleFunc(UI_PATH+"/", RenderDebugUI)
 
 	fmt.Println("Zoraxy Crowdsec Bouncer started at http://127.0.0.1:" + strconv.Itoa(runtimeCfg.Port))
@@ -127,7 +128,7 @@ func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) string {
 // It is called for each request
 //
 // TODO: if/when we support captchas, we should maybe add a header to the request, or something
-func SniffHandler(dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
+func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
 	// Check if the request has a response in the bouncer
 	ctx := context.Background()
 	response, err := bouncer.Get(ctx, GetRealIP(dsfr))
@@ -141,7 +142,7 @@ func SniffHandler(dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.Li
 	}
 
 	// Print the decisions for debugging
-	if DEBUG {
+	if config.Debug {
 		for _, decision := range *response {
 			fmt.Printf("decisions: IP: %s | Scenario: %s | Duration: %s | Scope : %v\n", *decision.Value, *decision.Scenario, *decision.Duration, *decision.Scope)
 		}
@@ -159,9 +160,9 @@ func SniffHandler(dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.Li
 // If the request was accepted, that means that there is a decision for the request IP,
 //
 // TODO: implement a way to present a captcha if the decision is to present a captcha
-func CaptureHandler(w http.ResponseWriter, r *http.Request) {
+func CaptureHandler(config *PluginConfig, w http.ResponseWriter, r *http.Request) {
 	// This is the dynamic capture handler where it actually captures and handle the request
-	if DEBUG {
+	if config.Debug {
 		fmt.Println("Dynamic capture handler called for request:", r.RequestURI)
 	}
 
