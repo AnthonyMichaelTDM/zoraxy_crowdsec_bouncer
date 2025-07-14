@@ -63,7 +63,7 @@ func main() {
 		Name:          "Crowdsec Bouncer Plugin for Zoraxy",
 		Author:        "Anthony Rubick",
 		AuthorContact: "",
-		Description:   "This is an example plugin for Zoraxy that demonstrates how to use dynamic captures.",
+		Description:   "This plugin is a Crowdsec bouncer for Zoraxy. It will block requests based on Crowdsec decisions.",
 		URL:           "https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer",
 		Type:          plugin.PluginType_Router,
 		VersionMajor:  1,
