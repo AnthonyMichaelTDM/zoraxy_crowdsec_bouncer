@@ -97,7 +97,7 @@ func main() {
 
 	// Setup the path router
 	pathRouter := plugin.NewPathRouter()
-	pathRouter.SetDebugPrintMode(true)
+	pathRouter.SetDebugPrintMode(config.Debug)
 
 	/*
 		Dynamic Captures
