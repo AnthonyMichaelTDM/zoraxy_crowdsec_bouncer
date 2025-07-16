@@ -17,7 +17,7 @@ import (
 type SniffResult int
 
 const (
-	SniffResultAccpet SniffResult = iota // Forward the request to this plugin dynamic capture ingress
+	SniffResultAccept SniffResult = iota // Forward the request to this plugin dynamic capture ingress
 	SniffResultSkip                      // Skip this plugin and let the next plugin handle the request
 )
 
@@ -62,7 +62,7 @@ func (p *PathRouter) RegisterDynamicSniffHandler(sniff_ingress string, mux *http
 		payload.rawRequest = r
 
 		sniffResult := handler(&payload)
-		if sniffResult == SniffResultAccpet {
+		if sniffResult == SniffResultAccept {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("OK"))
 		} else {
@@ -159,4 +159,24 @@ func (dsfr *DynamicSniffForwardRequest) GetRequest() *http.Request {
 // is not coming from the dynamic router
 func (dsfr *DynamicSniffForwardRequest) GetRequestUUID() string {
 	return dsfr.requestUUID
+}
+
+// SetRequest sets the raw request object
+// this is used exclusively for testing purposes
+func (dsfr *DynamicSniffForwardRequest) SetRequest(req *http.Request) {
+	dsfr.rawRequest = req
+	dsfr.Method = req.Method
+	dsfr.Hostname = req.Host
+	dsfr.URL = req.URL.String()
+	dsfr.Header = make(map[string][]string)
+	for k, v := range req.Header {
+		dsfr.Header[k] = v
+	}
+	dsfr.RemoteAddr = req.RemoteAddr
+	dsfr.Host = req.Host
+	dsfr.RequestURI = req.RequestURI
+	dsfr.Proto = req.Proto
+	dsfr.ProtoMajor = req.ProtoMajor
+	dsfr.ProtoMinor = req.ProtoMinor
+	dsfr.requestUUID = req.Header.Get("X-Zoraxy-RequestID")
 }

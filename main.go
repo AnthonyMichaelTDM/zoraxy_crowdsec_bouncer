@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"sort"
@@ -116,13 +117,30 @@ func main() {
 	http.ListenAndServe("127.0.0.1:"+strconv.Itoa(runtimeCfg.Port), nil)
 }
 
-func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) string {
+func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) (string, error) {
 	// Get the real IP address from the request
 	realIP := dsfr.RemoteAddr
-	if ip := dsfr.GetRequest().Header.Get("X-Real-IP"); ip != "" {
-		realIP = ip
+	if req := dsfr.GetRequest(); req != nil {
+		if ip := req.Header.Get("X-Real-IP"); ip != "" {
+			realIP = ip
+		} else if ip := req.Header.Get("CF-Connecting-IP"); ip != "" {
+			realIP = ip
+		}
 	}
-	return realIP
+
+	// extract the IP address from what is potentially a host:port format
+	ip, _, err := net.SplitHostPort(realIP)
+	if err != nil {
+		// If SplitHostPort fails, it means there is no port, so we can use the whole string as the IP
+		ip = realIP
+	}
+
+	// Validate the IP address
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("invalid IP address: %s", ip)
+	}
+
+	return ip, nil
 }
 
 // The Sniff handler is what decides whether to accept or skip a request
@@ -132,13 +150,19 @@ func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) string {
 func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
 	// Check if the request has a response in the bouncer
 	ctx := context.Background()
-	response, err := bouncer.Get(ctx, GetRealIP(dsfr))
+	ip, err := GetRealIP(dsfr)
+	if err != nil {
+		fmt.Println("GetRealIP Got an error: ", err, " for request: ", dsfr.GetRequest().RequestURI)
+		return plugin.SniffResultSkip // Skip the request if there is an error
+	}
+
+	response, err := bouncer.Get(ctx, ip)
 	if err != nil {
 		fmt.Println("Error getting decisions:", err)
 		return plugin.SniffResultSkip // Skip the request if there is an error
 	}
 	if len(*response) == 0 {
-		fmt.Println("No decision found for IP:", GetRealIP(dsfr))
+		fmt.Println("No decision found for IP:", ip)
 		return plugin.SniffResultSkip // Skip the request if there is no decision
 	}
 
@@ -151,8 +175,8 @@ func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest,
 
 	// Since we have a decision, and this is a naive bouncer, we
 	// will ban all requests that have a decision
-	fmt.Println("Decision found for IP: ", GetRealIP(dsfr))
-	return plugin.SniffResultAccpet // Accept the request to be handled by the Capture handler)
+	fmt.Println("Decision found for IP: ", ip)
+	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler)
 }
 
 // The Capture handler is what handles the requests that were accepted by the Sniff handler
