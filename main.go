@@ -26,9 +26,10 @@ const (
 )
 
 type PluginConfig struct {
-	APIKey   string `yaml:"api_key"`
-	AgentUrl string `yaml:"agent_url"`
-	Debug    bool   `yaml:"debug"`
+	APIKey                    string `yaml:"api_key"`
+	AgentUrl                  string `yaml:"agent_url"`
+	Debug                     bool   `yaml:"debug"`
+	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
 }
 
 func (p *PluginConfig) loadConfig() error {
@@ -118,36 +119,93 @@ func main() {
 	http.ListenAndServe("127.0.0.1:"+strconv.Itoa(runtimeCfg.Port), nil)
 }
 
-func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) (string, error) {
-	// Get the real IP address from the request
-	realIP := ""
-	if req := dsfr.GetRequest(); req != nil {
-		//Check if CF-Connecting-IP header exists
-		X_Real_IP := req.Header.Get("X-Real-IP")
-		CF_Connecting_IP := req.Header.Get("CF-Connecting-IP")
-		if X_Real_IP != "" {
-			//Use X-Real-IP header
-			realIP = X_Real_IP
-		} else if CF_Connecting_IP != "" {
-			//Use CF Connecting IP
-			realIP = CF_Connecting_IP
+// ExtractHeader extracts the values of a header from the request headers map
+// If the header is not found, behavior depends on the searchIfNotFound flag:
+//   - If true, will search all the keys in the headers map to find a case-insensitive match
+//   - If false, will return an empty string
+func ExtractHeader(headers map[string][]string, key string, searchIfNotFound bool) (string, error) {
+	// first, try accessing the header directly
+	if values, ok := headers[key]; ok {
+		if concattenated := strings.Join(values, ", "); concattenated != "" {
+			return concattenated, nil
 		} else {
-			// Not exists. Fill it in with first entry in X-Forwarded-For
-			clientIP := req.Header.Get("X-Forwarded-For")
-			ips := strings.Split(clientIP, ",")
-			if len(ips) > 0 {
-				realIP = strings.TrimSpace(ips[0])
+			return "", fmt.Errorf("header %s found but has no values", key)
+		}
+	}
+
+	if searchIfNotFound {
+		// If not found, search for a case-insensitive match
+		for k, v := range headers {
+			if strings.EqualFold(k, key) && len(v) > 0 {
+				return strings.Join(v, ", "), nil
 			}
 		}
 	}
-	if realIP == "" {
-		// Fallback to RemoteAddr if no headers are set
-		realIP = dsfr.RemoteAddr
-	}
 
-	if realIP == "" {
+	return "", fmt.Errorf("header %s not found", key)
+}
+
+// GetRealIP extracts the real IP address from the request headers.
+// It checks for the `X-Real-IP`, `CF-Connecting-IP`, and `X-Forwarded-For` headers
+//
+// # Arguments:
+//   - dsfr: The DynamicSniffForwardRequest object containing the request headers and remote
+//   - isProxiedBehindCloudflare: If true, it will prioritize the `CF-Connecting-IP` header
+//   - debug: If true, it will print extra debug information to the console
+func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest, isProxiedBehindCloudflare bool, debug bool) (string, error) {
+	// Get the real IP address from the request
+	realIP := ""
+
+	// Check for the `X-Real-IP`, `CF-Connecting-IP`, and `X-Forwarded-For` headers
+	if headers := dsfr.Header; headers != nil {
+		// Check for X-Real-IP header, we don't really expect to see this so we won't log an error if it is not found
+		X_Real_IP, err := ExtractHeader(headers, "X-Real-IP", false)
+		if err == nil && X_Real_IP != "" {
+			// Use X-Real-IP header
+			realIP = X_Real_IP
+			goto IPFound
+		}
+
+		// Check for CF-Connecting-IP header
+		CF_Connecting_IP, err := ExtractHeader(headers, "CF-Connecting-IP", isProxiedBehindCloudflare)
+		if err != nil && debug && isProxiedBehindCloudflare {
+			fmt.Println("GetRealIP failed to extract CF-Connecting-IP for request with UUID", dsfr.GetRequestUUID(), ":", err)
+		} else if CF_Connecting_IP == "" && debug {
+			fmt.Println("GetRealIP got an empty string for CF-Connecting-IP for request with UUID", dsfr.GetRequestUUID())
+		} else if CF_Connecting_IP != "" {
+			// Use CF Connecting IP
+			realIP = CF_Connecting_IP
+			goto IPFound
+		}
+
+		// Check for X-Forwarded-For header
+		// We take the first IP in the list, as it is the original client IP
+		X_Forwarded_For, err := ExtractHeader(headers, "X-Forwarded-For", true)
+		if err != nil && debug {
+			fmt.Println("GetRealIP failed to extract X-Forwarded-For for request with UUID", dsfr.GetRequestUUID(), ":", err)
+		} else if X_Forwarded_For == "" && debug {
+			fmt.Println("GetRealIP got an empty string for X-Forwarded-For for request with UUID", dsfr.GetRequestUUID())
+		} else if X_Forwarded_For != "" {
+			// Use X-Forwarded-For header
+			// We take the first IP in the list, as it is the original client IP
+			ips := strings.Split(X_Forwarded_For, ",")
+			if len(ips) > 0 {
+				realIP = strings.TrimSpace(ips[0])
+			}
+			goto IPFound
+		}
+	}
+	// If no headers are found, we will use the RemoteAddr, if it is not empty
+	if dsfr.RemoteAddr != "" {
+		if debug {
+			fmt.Println("GetRealIP using RemoteAddr for request with UUID", dsfr.GetRequestUUID(), ":", dsfr.RemoteAddr)
+		}
+		realIP = dsfr.RemoteAddr
+	} else {
 		return "", fmt.Errorf("no valid IP address found in headers")
 	}
+IPFound:
+	realIP = strings.TrimSpace(realIP)
 
 	// extract the IP address from what is potentially a host:port format
 	ip, _, err := net.SplitHostPort(realIP)
@@ -171,7 +229,7 @@ func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) (string, error) {
 func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
 	// Check if the request has a response in the bouncer
 	ctx := context.Background()
-	ip, err := GetRealIP(dsfr)
+	ip, err := GetRealIP(dsfr, config.IsProxiedBehindCloudflare, config.Debug)
 	if err != nil {
 		fmt.Println("GetRealIP Got an error: ", err, " for request: ", dsfr.GetRequest().RequestURI)
 		return plugin.SniffResultSkip // Skip the request if there is an error

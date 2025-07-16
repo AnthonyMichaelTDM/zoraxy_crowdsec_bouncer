@@ -160,23 +160,3 @@ func (dsfr *DynamicSniffForwardRequest) GetRequest() *http.Request {
 func (dsfr *DynamicSniffForwardRequest) GetRequestUUID() string {
 	return dsfr.requestUUID
 }
-
-// SetRequest sets the raw request object
-// this is used exclusively for testing purposes
-func (dsfr *DynamicSniffForwardRequest) SetRequest(req *http.Request) {
-	dsfr.rawRequest = req
-	dsfr.Method = req.Method
-	dsfr.Hostname = req.Host
-	dsfr.URL = req.URL.String()
-	dsfr.Header = make(map[string][]string)
-	for k, v := range req.Header {
-		dsfr.Header[k] = v
-	}
-	dsfr.RemoteAddr = req.RemoteAddr
-	dsfr.Host = req.Host
-	dsfr.RequestURI = req.RequestURI
-	dsfr.Proto = req.Proto
-	dsfr.ProtoMajor = req.ProtoMajor
-	dsfr.ProtoMinor = req.ProtoMinor
-	dsfr.requestUUID = req.Header.Get("X-Zoraxy-RequestID")
-}
