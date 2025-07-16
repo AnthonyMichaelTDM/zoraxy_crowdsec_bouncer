@@ -6,6 +6,8 @@ require (
 	github.com/crowdsecurity/crowdsec v1.6.10
 	github.com/crowdsecurity/go-cs-bouncer v0.0.17-0.20250708125915-2ee9e98dab3c
 	github.com/crowdsecurity/go-cs-lib v0.0.20
+	github.com/prometheus/client_golang v1.22.0
+	github.com/prometheus/client_model v0.6.2
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/sync v0.15.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -37,8 +39,6 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid v1.3.1 // indirect
-	github.com/prometheus/client_golang v1.22.0 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.65.0 // indirect
 	github.com/prometheus/procfs v0.17.0 // indirect
 	go.mongodb.org/mongo-driver v1.17.4 // indirect

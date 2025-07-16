@@ -20,6 +20,7 @@ import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
@@ -143,11 +144,17 @@ func main() {
 		logger,
 	)
 	if err != nil {
-		logger.Warnf("unable to initialize metrics provider, continuing anyway: %v", err)
+		logger.Fatalf("unable to initialize metrics provider: %v", err)
+		panic(err)
 	}
+
 	g.Go(func() error {
 		return metricsProvider.Run(ctx)
 	})
+
+	metrics.Map.MustRegisterAll()
+
+	prometheus.MustRegister(csbouncer.TotalLAPICalls, csbouncer.TotalLAPIError)
 
 	/*
 		Dynamic Captures
@@ -158,11 +165,11 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		metricsHandler.MarkRequestProcessed()
+		metricsHandler.MarkRequestProcessed(dsfr.Hostname)
 		return SniffHandler(logger, ctx, config, dsfr, bouncer)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
-		metricsHandler.MarkRequestBlocked()
+		metricsHandler.MarkRequestBlocked(r.URL.Host)
 		CaptureHandler(logger, w, r)
 	})
 	http.HandleFunc(info.UI_PATH+"/", RenderDebugUI)
