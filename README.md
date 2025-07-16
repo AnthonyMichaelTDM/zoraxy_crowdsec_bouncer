@@ -14,6 +14,32 @@ For now, it uses a live bouncer, which queries the Crowdsec API for decisions on
 
 ## Installation
 
+<https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
+
+### From GitHub Actions Artifacts
+
+Create a directory for the plugin if it doesn't exist:
+
+```bash
+mkdir -p /opt/zoraxy/plugins/zoraxy_crowdsec_bouncer
+```
+
+Then, copy the link to the latest binary from the [releases page](https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases) and use `wget` to download it to the `zoraxy_crowdsec_bouncer` directory:
+
+```bash
+cd /opt/zoraxy/plugins/zoraxy_crowdsec_bouncer
+wget <LINK_TO_LATEST_BINARY>
+chmod +x zoraxy_crowdsec_bouncer
+```
+
+Also download the `config.yaml` file from the repository:
+
+```bash
+wget https://raw.githubusercontent.com/AnthonyMichaelTDM/zoraxy-crowdsec-bouncer/main/config.yaml
+```
+
+### From Source
+
 Clone the repository inside the Zoraxy plugins directory, then build the plugin:
 
 ```bash
@@ -24,8 +50,6 @@ cd zoraxy-crowdsec-bouncer
 go build -o zoraxy_crowdsec_bouncer.so
 chmod +x zoraxy_crowdsec_bouncer.so
 ```
-
-<https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
 
 ## Configuration
 
