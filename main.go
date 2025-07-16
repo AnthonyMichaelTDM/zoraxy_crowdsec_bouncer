@@ -50,13 +50,6 @@ func (p *PluginConfig) loadConfig() error {
 }
 
 func main() {
-	// load the configuration, we do this first in case there are any errors
-	config := &PluginConfig{}
-	if err := config.loadConfig(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Serve the plugin introspect
 	// This will print the plugin introspect and exit if the -introspect flag is provided
 	runtimeCfg, err := plugin.ServeAndRecvSpec(&plugin.IntroSpect{
@@ -69,7 +62,7 @@ func main() {
 		Type:          plugin.PluginType_Router,
 		VersionMajor:  1,
 		VersionMinor:  0,
-		VersionPatch:  0,
+		VersionPatch:  1,
 
 		DynamicCaptureSniff:   DYNAMIC_CAPTURE_SNIFF,
 		DynamicCaptureIngress: DYNAMIC_CAPTURE_INGRESS,
@@ -78,6 +71,13 @@ func main() {
 	})
 	if err != nil {
 		//Terminate or enter standalone mode here
+		panic(err)
+	}
+
+	// load the configuration, we do this first in case there are any errors
+	config := &PluginConfig{}
+	if err := config.loadConfig(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		panic(err)
 	}
 
