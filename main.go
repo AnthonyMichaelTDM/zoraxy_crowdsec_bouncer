@@ -158,9 +158,11 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
+		metricsHandler.MarkRequestProcessed()
 		return SniffHandler(logger, ctx, config, dsfr, bouncer)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
+		metricsHandler.MarkRequestBlocked()
 		CaptureHandler(logger, w, r)
 	})
 	http.HandleFunc(info.UI_PATH+"/", RenderDebugUI)

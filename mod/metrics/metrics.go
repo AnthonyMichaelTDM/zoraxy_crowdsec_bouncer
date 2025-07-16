@@ -15,40 +15,42 @@ import (
 )
 
 type MetricName string
+type MetricUnit string
 
 const (
-	RequestsDropped   MetricName = "zoraxy_bouncer_dropped_requests"
-	RequestsAccepted  MetricName = "zoraxy_bouncer_accepted_requests"
-	RequestsProcessed MetricName = "zoraxy_bouncer_processed_requests"
+	BLOCKED   MetricName = "dropped"
+	PROCESSED MetricName = "processed"
+
+	REQUESTS MetricUnit = "requests"
 )
 
 // NOTE: Currently, all metrics are treated as absolute counts.
 type Metric struct {
 	Name   string
+	Unit   string
 	Value  float64
 	Labels map[string]string
-	Unit   string
 	Help   string
 	// Updater csbouncer.MetricsUpdater
 }
 
-func defaultZoraxyRequestsBlockedMetric() *Metric {
+func newBlockedRequestsMetric() *Metric {
 	return &Metric{
-		Name:   string(RequestsDropped),
+		Name:   string(BLOCKED),
+		Unit:   string(REQUESTS),
 		Value:  0.0,
 		Labels: map[string]string{"bouncer_type": "zoraxy", "bouncer_version": info.VERSION_STRING},
-		Unit:   "request",
 		Help:   "Total number of requests blocked by the Zoraxy bouncer",
 	}
 }
 
-func defaultZoraxyRequestsAcceptedMetric() *Metric {
+func newProcessedRequestsMetric() *Metric {
 	return &Metric{
-		Name:   string(RequestsAccepted),
+		Name:   string(PROCESSED),
+		Unit:   string(REQUESTS),
 		Value:  0.0,
 		Labels: map[string]string{"bouncer_type": "zoraxy", "bouncer_version": info.VERSION_STRING},
-		Unit:   "request",
-		Help:   "Total number of requests accepted by the Zoraxy bouncer",
+		Help:   "Total number of requests processed by the Zoraxy bouncer",
 	}
 }
 
@@ -66,8 +68,8 @@ func NewMetricsHandler(logger *logrus.Logger) *MetricsHandler {
 		Metrics: make(map[MetricName]*Metric),
 	}
 	// Initialize the metrics map
-	mh.Metrics[RequestsDropped] = defaultZoraxyRequestsBlockedMetric()
-	mh.Metrics[RequestsAccepted] = defaultZoraxyRequestsAcceptedMetric()
+	mh.Metrics[BLOCKED] = newBlockedRequestsMetric()
+	mh.Metrics[PROCESSED] = newProcessedRequestsMetric()
 
 	return mh
 }
@@ -76,36 +78,24 @@ func (mh *MetricsHandler) MarkRequestBlocked() {
 	mh.Lock.Lock()
 	defer mh.Lock.Unlock()
 
-	if metric, exists := mh.Metrics[RequestsDropped]; exists {
+	if metric, exists := mh.Metrics[BLOCKED]; exists {
 		metric.Value++
 	} else {
-		mh.Metrics[RequestsDropped] = defaultZoraxyRequestsBlockedMetric()
-		mh.Metrics[RequestsDropped].Value++
+		mh.Metrics[BLOCKED] = newBlockedRequestsMetric()
+		mh.Metrics[BLOCKED].Value++
 	}
 }
 
-func (mh *MetricsHandler) MarkRequestAccepted() {
+func (mh *MetricsHandler) MarkRequestProcessed() {
 	mh.Lock.Lock()
 	defer mh.Lock.Unlock()
 
-	if metric, exists := mh.Metrics[RequestsAccepted]; exists {
+	if metric, exists := mh.Metrics[PROCESSED]; exists {
 		metric.Value++
 	} else {
-		mh.Metrics[RequestsAccepted] = defaultZoraxyRequestsAcceptedMetric()
-		mh.Metrics[RequestsAccepted].Value++
+		mh.Metrics[PROCESSED] = newProcessedRequestsMetric()
+		mh.Metrics[PROCESSED].Value++
 	}
-}
-
-func (mh *MetricsHandler) getProcessedRequests() float64 {
-	accepted := 0.
-	if metric, exists := mh.Metrics[RequestsAccepted]; exists {
-		accepted = metric.Value
-	}
-	blocked := 0.
-	if metric, exists := mh.Metrics[RequestsDropped]; exists {
-		blocked = metric.Value
-	}
-	return accepted + blocked
 }
 
 // MetricsUpdater receives a metrics struct with basic data and populates it with the current metrics.
@@ -134,12 +124,4 @@ func (mh *MetricsHandler) MetricsUpdater(met *models.RemediationComponentsMetric
 			Value:  &metric.Value,
 		})
 	}
-
-	// also report the total number of requests processed
-	met.Metrics[0].Items = append(met.Metrics[0].Items, &models.MetricsDetailItem{
-		Name:   ptr.Of(string(RequestsProcessed)),
-		Labels: map[string]string{"bouncer_type": "zoraxy", "bouncer_version": info.VERSION_STRING},
-		Unit:   ptr.Of("request"),
-		Value:  ptr.Of(mh.getProcessedRequests()),
-	})
 }
