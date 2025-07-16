@@ -27,10 +27,10 @@ mkdir -p /opt/zoraxy/plugins/zoraxy_crowdsec_bouncer
 Then, copy the link to the latest binary from the [releases page](https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases) and use `wget` to download it to the `zoraxy_crowdsec_bouncer` directory:
 
 ```bash
-cd /opt/zoraxy/plugins/zoraxy_crowdsec_bouncer
+cd /opt/zoraxy/plugins/zoraxycrowdsecbouncer
 # wget <LINK_TO_LATEST_BINARY>
-wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.0.0/zoraxy_crowdsec_bouncer
-chmod +x zoraxy_crowdsec_bouncer
+wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.0.0/zoraxycrowdsecbouncer
+chmod +x zoraxycrowdsecbouncer
 ```
 
 Do the same for the `config.yaml` file:
@@ -45,11 +45,11 @@ Clone the repository inside the Zoraxy plugins directory, then build the plugin:
 
 ```bash
 cd /opt/zoraxy/plugins
-git clone https://github.com/AnthonyMichaelTDM/zoraxy-crowdsec-bouncer.git
+git clone https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer.git zoraxycrowdsecbouncer
 
-cd zoraxy-crowdsec-bouncer
-go build -o zoraxy_crowdsec_bouncer.so
-chmod +x zoraxy_crowdsec_bouncer.so
+cd zoraxycrowdsecbouncer
+go build -o zoraxycrowdsecbouncer.so
+chmod +x zoraxycrowdsecbouncer.so
 ```
 
 ## Configuration
@@ -69,6 +69,3 @@ You can get the API key by running the following command:
 ```bash
 sudo cscli bouncers add zoraxy-crowdsec-bouncer
 ```
-
-
-
