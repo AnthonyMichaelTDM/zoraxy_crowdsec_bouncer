@@ -1,7 +1,7 @@
 # Crowdsec Bouncer Configuration
 api_key: <CROWDSEC_BOUNCER_API_KEY>
 agent_url: http://127.0.0.1:8080
-# Whether to enable debug logging
-debug: false
+# Log level for the bouncer, options: trace, debug, info, warning, error
+log_level: warning
 # Set to true if zoraxy is proxied behind Cloudflare
 is_proxied_behind_cloudflare: true
