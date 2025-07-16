@@ -96,6 +96,22 @@ func TestGetRealIP(t *testing.T) {
 			},
 			expected: "2001:db8::1",
 		},
+		{
+			name:       "X-Forwarded-For with multiple IPs",
+			remoteAddr: "",
+			headers: map[string]string{
+				"X-Forwarded-For": "1.2.3.4, 5.6.7.8",
+			},
+			expected: "1.2.3.4",
+		},
+		{
+			name:       "X-Forwarded-For with single IP",
+			remoteAddr: "",
+			headers: map[string]string{
+				"X-Forwarded-For": "1.2.3.4",
+			},
+			expected: "1.2.3.4",
+		},
 	}
 
 	for _, tt := range tests {

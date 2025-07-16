@@ -10,6 +10,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
@@ -119,13 +120,33 @@ func main() {
 
 func GetRealIP(dsfr *plugin.DynamicSniffForwardRequest) (string, error) {
 	// Get the real IP address from the request
-	realIP := dsfr.RemoteAddr
+	realIP := ""
 	if req := dsfr.GetRequest(); req != nil {
-		if ip := req.Header.Get("X-Real-IP"); ip != "" {
-			realIP = ip
-		} else if ip := req.Header.Get("CF-Connecting-IP"); ip != "" {
-			realIP = ip
+		//Check if CF-Connecting-IP header exists
+		X_Real_IP := req.Header.Get("X-Real-IP")
+		CF_Connecting_IP := req.Header.Get("CF-Connecting-IP")
+		if X_Real_IP != "" {
+			//Use X-Real-IP header
+			realIP = X_Real_IP
+		} else if CF_Connecting_IP != "" {
+			//Use CF Connecting IP
+			realIP = CF_Connecting_IP
+		} else {
+			// Not exists. Fill it in with first entry in X-Forwarded-For
+			clientIP := req.Header.Get("X-Forwarded-For")
+			ips := strings.Split(clientIP, ",")
+			if len(ips) > 0 {
+				realIP = strings.TrimSpace(ips[0])
+			}
 		}
+	}
+	if realIP == "" {
+		// Fallback to RemoteAddr if no headers are set
+		realIP = dsfr.RemoteAddr
+	}
+
+	if realIP == "" {
+		return "", fmt.Errorf("no valid IP address found in headers")
 	}
 
 	// extract the IP address from what is potentially a host:port format
