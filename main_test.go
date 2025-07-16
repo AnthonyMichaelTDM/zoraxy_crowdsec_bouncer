@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
+	"github.com/sirupsen/logrus"
 )
 
-const DEBUG_GET_REAL_IP = false
+const LOG_LEVEL = logrus.WarnLevel
 
 func TestGetRealIP(t *testing.T) {
 	tests := []struct {
@@ -177,8 +178,12 @@ func TestGetRealIP(t *testing.T) {
 			}
 			maps.Copy(dsfr.Header, tt.headers)
 
+			// Create a logger
+			logger := logrus.StandardLogger()
+			logger.SetLevel(LOG_LEVEL)
+
 			// Call the function
-			result, err := GetRealIP(dsfr, tt.isProxied, DEBUG_GET_REAL_IP)
+			result, err := GetRealIP(logger, dsfr, tt.isProxied)
 			if err != nil {
 				t.Errorf("GetRealIP() error = %v", err)
 			}
@@ -198,9 +203,13 @@ func BenchmarkGetRealIP(b *testing.B) {
 		Header:     map[string][]string{"X-Real-IP": {"10.0.0.5"}},
 	}
 
+	// Create a logger
+	logger := logrus.StandardLogger()
+	logger.SetLevel(LOG_LEVEL)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		GetRealIP(dsfr, false, false)
+		GetRealIP(logger, dsfr, false)
 	}
 }
 
@@ -216,9 +225,12 @@ func TestGetRealIPEdgeCases(t *testing.T) {
 		dsfr := &plugin.DynamicSniffForwardRequest{
 			RemoteAddr: "192.168.1.100:8080",
 		}
-		// Don't set a request (it will be nil)
 
-		result, err := GetRealIP(dsfr, false, DEBUG_GET_REAL_IP)
+		// Create a logger
+		logger := logrus.StandardLogger()
+		logger.SetLevel(LOG_LEVEL)
+
+		result, err := GetRealIP(logger, dsfr, false)
 		if err != nil {
 			t.Errorf("GetRealIP returned an error: %v", err)
 		}
