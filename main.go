@@ -2,30 +2,27 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"io"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v2"
-)
-
-const (
-	PLUGIN_ID               = "com.anthonyrubick.zoraxycrowdsecbouncer"
-	UI_PATH                 = "/debug"
-	DYNAMIC_CAPTURE_INGRESS = "/d_capture"
-	DYNAMIC_CAPTURE_SNIFF   = "/d_sniff"
-	CONFIGURATION_FILE      = "./config.yaml"
-	BOUNCER_TYPE            = "zoraxy-crowdsec-bouncer"
 )
 
 type PluginConfig struct {
@@ -38,7 +35,7 @@ type PluginConfig struct {
 }
 
 func (p *PluginConfig) loadConfig() error {
-	configFile, err := os.Open(CONFIGURATION_FILE)
+	configFile, err := os.Open(info.CONFIGURATION_FILE)
 	if err != nil {
 		return fmt.Errorf("unable to open config file: %w", err)
 	}
@@ -63,25 +60,44 @@ func (p *PluginConfig) loadConfig() error {
 	return nil
 }
 
+func HandleSignals(ctx context.Context) error {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, os.Interrupt)
+
+	select {
+	case s := <-signalChan:
+		switch s {
+		case syscall.SIGTERM:
+			return errors.New("received SIGTERM")
+		case os.Interrupt: // cross-platform SIGINT
+			return errors.New("received interrupt")
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return nil
+}
+
 func main() {
 	// Serve the plugin introspect
 	// This will print the plugin introspect and exit if the -introspect flag is provided
 	pluginIntoSpect := &plugin.IntroSpect{
-		ID:            PLUGIN_ID,
+		ID:            info.PLUGIN_ID,
 		Name:          "Crowdsec Bouncer Plugin for Zoraxy",
 		Author:        "Anthony Rubick",
 		AuthorContact: "",
 		Description:   "This plugin is a Crowdsec bouncer for Zoraxy. It will block requests based on Crowdsec decisions.",
 		URL:           "https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer",
 		Type:          plugin.PluginType_Router,
-		VersionMajor:  1,
-		VersionMinor:  0,
-		VersionPatch:  4,
+		VersionMajor:  info.VERSION_MAJOR,
+		VersionMinor:  info.VERSION_MINOR,
+		VersionPatch:  info.VERSION_PATCH,
 
-		DynamicCaptureSniff:   DYNAMIC_CAPTURE_SNIFF,
-		DynamicCaptureIngress: DYNAMIC_CAPTURE_INGRESS,
+		DynamicCaptureSniff:   info.DYNAMIC_CAPTURE_SNIFF,
+		DynamicCaptureIngress: info.DYNAMIC_CAPTURE_INGRESS,
 
-		UIPath: UI_PATH,
+		UIPath: info.UI_PATH,
 	}
 	runtimeCfg, err := plugin.ServeAndRecvSpec(pluginIntoSpect)
 	if err != nil {
@@ -96,28 +112,42 @@ func main() {
 		panic(err)
 	}
 
-	// Initialize the Crowdsec bouncer
-	versionString := strconv.Itoa(pluginIntoSpect.VersionMajor) + "." + strconv.Itoa(pluginIntoSpect.VersionMinor) + "." + strconv.Itoa(pluginIntoSpect.VersionPatch)
-	bouncer := &csbouncer.LiveBouncer{
-		APIKey:    config.APIKey,
-		APIUrl:    config.AgentUrl,
-		UserAgent: BOUNCER_TYPE + "-" + versionString,
-	}
-	if err := bouncer.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "unable to initialize bouncer: %v\n", err)
-		os.Exit(1)
-	}
-
 	// initialize the logger
 	logger := logrus.StandardLogger()
 	logger.Level = config.LogLevel
+
+	// Initialize the Crowdsec bouncer
+	bouncer := &csbouncer.LiveBouncer{
+		APIKey:    config.APIKey,
+		APIUrl:    config.AgentUrl,
+		UserAgent: info.BOUNCER_TYPE + "-" + info.VERSION_STRING,
+	}
+	if err := bouncer.Init(); err != nil {
+		logger.Fatalf("unable to initialize bouncer: %v", err)
+		panic(err)
+	}
 
 	// initialize the path router
 	pathRouter := plugin.NewPathRouter()
 	pathRouter.SetDebugPrintMode(config.LogLevel >= logrus.DebugLevel)
 
-	// parent context for the metrics provider and bouncer
-	ctx := context.Background()
+	// errGroup and context for the metrics provider and bouncer
+	g, ctx := errgroup.WithContext(context.Background())
+
+	// initialize and start a metrics provider
+	metricsHandler := metrics.NewMetricsHandler(logger)
+	metricsProvider, err := csbouncer.NewMetricsProvider(
+		bouncer.APIClient,
+		info.BOUNCER_TYPE,
+		metricsHandler.MetricsUpdater,
+		logger,
+	)
+	if err != nil {
+		logger.Warnf("unable to initialize metrics provider, continuing anyway: %v", err)
+	}
+	g.Go(func() error {
+		return metricsProvider.Run(ctx)
+	})
 
 	/*
 		Dynamic Captures
@@ -130,13 +160,29 @@ func main() {
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
 		return SniffHandler(logger, ctx, config, dsfr, bouncer)
 	})
-	pathRouter.RegisterDynamicCaptureHandle(DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
+	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
 		CaptureHandler(logger, w, r)
 	})
-	http.HandleFunc(UI_PATH+"/", RenderDebugUI)
+	http.HandleFunc(info.UI_PATH+"/", RenderDebugUI)
 
 	fmt.Println("Zoraxy Crowdsec Bouncer started at http://127.0.0.1:" + strconv.Itoa(runtimeCfg.Port))
 	http.ListenAndServe("127.0.0.1:"+strconv.Itoa(runtimeCfg.Port), nil)
+
+	// Handle signals
+	g.Go(func() error {
+		if err := HandleSignals(ctx); err != nil {
+			logger.Warnf("Received signal: %v", err)
+			return err
+		}
+		return nil
+	})
+
+	// wait for the goroutine to finish
+	if err := g.Wait(); err != nil {
+		logger.Fatalf("process terminated with error: %v", err)
+	} else {
+		logger.Info("process terminated gracefully")
+	}
 }
 
 // ExtractHeader extracts the values of a header from the request headers map
