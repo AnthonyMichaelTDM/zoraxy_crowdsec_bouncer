@@ -79,7 +79,7 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         draft: false
-        prerelease: false
+        prerelease: true
         generate_release_notes: true
         body: ${{ steps.release_body.outputs.BODY }}
         files: |
