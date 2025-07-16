@@ -183,7 +183,9 @@ func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest,
 		return plugin.SniffResultSkip // Skip the request if there is an error
 	}
 	if len(*response) == 0 {
-		fmt.Println("No decision found for IP:", ip)
+		if config.Debug {
+			fmt.Println("No decision found for IP:", ip)
+		}
 		return plugin.SniffResultSkip // Skip the request if there is no decision
 	}
 
@@ -196,7 +198,9 @@ func SniffHandler(config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest,
 
 	// Since we have a decision, and this is a naive bouncer, we
 	// will ban all requests that have a decision
-	fmt.Println("Decision found for IP: ", ip)
+	if config.Debug {
+		fmt.Println("Decision found for IP: ", ip)
+	}
 	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler)
 }
 
