@@ -63,7 +63,7 @@ func main() {
 		Type:          plugin.PluginType_Router,
 		VersionMajor:  1,
 		VersionMinor:  0,
-		VersionPatch:  1,
+		VersionPatch:  2,
 
 		DynamicCaptureSniff:   DYNAMIC_CAPTURE_SNIFF,
 		DynamicCaptureIngress: DYNAMIC_CAPTURE_INGRESS,
