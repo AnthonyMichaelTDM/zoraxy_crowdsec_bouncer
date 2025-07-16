@@ -1,0 +1,74 @@
+name: Build and Create Release
+permissions:
+  "contents": "write"
+  "id-token": "write"
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '**[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.5'
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Build
+      run: go build -o zoraxy_crowdsec_bouncer
+
+    - name: generate checksums
+      run: |
+        sha256sum zoraxy_crowdsec_bouncer > zoraxy_crowdsec_bouncer.sha256
+        sha256sum config.yaml > config.yaml.sha256
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: zoraxy_crowdsec_bouncer
+        path: |
+          zoraxy_crowdsec_bouncer
+          config.yaml
+          zoraxy_crowdsec_bouncer.sha256
+          config.yaml.sha256
+
+    - name: Create release body
+      id: release_body
+      run: |
+          echo "# Release notes for ${{ github.ref_name }}" > release_notes.txt
+          echo "Build date: $(date)" >> release_notes.txt
+          echo "Go version: $(go version)" >> release_notes.txt
+          echo "Commit SHA: ${{ github.sha }}" >> release_notes.txt
+          echo "checksums:" >> release_notes.txt
+          echo "- zoraxy_crowdsec_bouncer: `$(sha256sum zoraxy_crowdsec_bouncer | awk '{print $1}')`" >> release_notes.txt
+          echo "- config.yaml: `$(sha256sum config.yaml | awk '{print $1}')`" >> release_notes.txt
+          echo "::set-output name=body::$(cat release_notes.txt)"
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: ${{ steps.release_body.outputs.body }}
+        files: |
+          zoraxy_crowdsec_bouncer
+          config.yaml
+          zoraxy_crowdsec_bouncer.sha256
+          config.yaml.sha256
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
