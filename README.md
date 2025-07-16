@@ -16,7 +16,7 @@ For now, it uses a live bouncer, which queries the Crowdsec API for decisions on
 
 <https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
 
-### From GitHub Actions Artifacts
+### From GitHub Releases
 
 Create a directory for the plugin if it doesn't exist:
 
@@ -61,7 +61,8 @@ in the same directory as the plugin, there should be a `config.yaml` file with s
 ```yaml
 api_key: YOUR_API_KEY
 agent_url: http://127.0.0.1:8080 # for example
-debug: false
+log_level: warning # Log level for the bouncer, options: trace, debug, info, warning, error
+is_proxied_behind_cloudflare: true # Set to true if your zoraxy instance is proxied behind Cloudflare
 ```
 
 You can get the API key by running the following command:
