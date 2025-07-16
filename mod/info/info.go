@@ -9,8 +9,8 @@ const (
 	BOUNCER_TYPE            = "zoraxy-crowdsec-bouncer"
 
 	VERSION_MAJOR = 1
-	VERSION_MINOR = 0
-	VERSION_PATCH = 5
+	VERSION_MINOR = 1
+	VERSION_PATCH = 0
 
-	VERSION_STRING = "1.0.5"
+	VERSION_STRING = "1.1.0"
 )
