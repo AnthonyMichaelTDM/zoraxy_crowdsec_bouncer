@@ -28,14 +28,15 @@ Then, copy the link to the latest binary from the [releases page](https://github
 
 ```bash
 cd /opt/zoraxy/plugins/zoraxy_crowdsec_bouncer
-wget <LINK_TO_LATEST_BINARY>
+# wget <LINK_TO_LATEST_BINARY>
+wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.0.0/zoraxy_crowdsec_bouncer
 chmod +x zoraxy_crowdsec_bouncer
 ```
 
-Also download the `config.yaml` file from the repository:
+Do the same for the `config.yaml` file:
 
 ```bash
-wget https://raw.githubusercontent.com/AnthonyMichaelTDM/zoraxy-crowdsec-bouncer/main/config.yaml
+wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.0.0/config.yaml
 ```
 
 ### From Source
