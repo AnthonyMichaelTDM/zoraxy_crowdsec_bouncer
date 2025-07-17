@@ -142,7 +142,7 @@ func (mh *MetricsHandler) MetricsUpdater(met *models.RemediationComponentsMetric
 	for _, pm := range promMetrics {
 		cfg, ok := Map[metricName(pm.GetName())]
 		if !ok {
-			mh.logger.Warnf("unknown metric %s, skipping", pm.GetName())
+			mh.logger.Debugf("unknown metric %s, skipping", pm.GetName())
 			continue
 		}
 
