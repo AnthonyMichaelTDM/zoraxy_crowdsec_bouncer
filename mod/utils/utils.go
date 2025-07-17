@@ -1,8 +1,16 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+
+	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 // ExtractHeader extracts the values of a header from the request headers map
@@ -29,4 +37,37 @@ func ExtractHeader(headers map[string][]string, key string, searchIfNotFound boo
 	}
 
 	return "", fmt.Errorf("header %s not found", key)
+}
+
+func handleSignals(ctx context.Context) error {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM, os.Interrupt)
+
+	select {
+	case s := <-signalChan:
+		switch s {
+		case syscall.SIGTERM:
+			return errors.New("received SIGTERM")
+		case os.Interrupt: // cross-platform SIGINT
+			return errors.New("received interrupt")
+		}
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	return nil
+}
+
+func StartSignalHandler(logger *logrus.Logger, g *errgroup.Group) {
+	g.Go(func() error {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		if err := handleSignals(ctx); err != nil {
+			logger.Warnf("Signal handler received an error: %v", err)
+			return err
+		}
+
+		return nil
+	})
 }

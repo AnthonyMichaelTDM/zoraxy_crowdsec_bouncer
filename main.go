@@ -2,13 +2,10 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
@@ -54,25 +51,6 @@ func (p *PluginConfig) loadConfig() error {
 	p.LogLevel, err = logrus.ParseLevel(p.LogLevelString)
 	if err != nil {
 		return fmt.Errorf("unable to parse log level: %w", err)
-	}
-
-	return nil
-}
-
-func HandleSignals(ctx context.Context) error {
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGTERM, os.Interrupt)
-
-	select {
-	case s := <-signalChan:
-		switch s {
-		case syscall.SIGTERM:
-			return errors.New("received SIGTERM")
-		case os.Interrupt: // cross-platform SIGINT
-			return errors.New("received interrupt")
-		}
-	case <-ctx.Done():
-		return ctx.Err()
 	}
 
 	return nil
@@ -172,13 +150,7 @@ func main() {
 	web.InitWebUI(g, runtimeCfg.Port)
 
 	// Handle signals
-	g.Go(func() error {
-		if err := HandleSignals(ctx); err != nil {
-			logger.Warnf("Received signal: %v", err)
-			return err
-		}
-		return nil
-	})
+	utils.StartSignalHandler(logger, g)
 
 	// wait for the goroutine to finish
 	if err := g.Wait(); err != nil {
