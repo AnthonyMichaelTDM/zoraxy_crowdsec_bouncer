@@ -171,10 +171,9 @@ func main() {
 		metricsHandler.MarkRequestBlocked(r.URL.Host)
 		CaptureHandler(logger, w, r)
 	})
-	http.HandleFunc(info.UI_PATH+"/", webui.RenderDebugUI)
 
 	fmt.Println("Zoraxy Crowdsec Bouncer started at http://127.0.0.1:" + strconv.Itoa(runtimeCfg.Port))
-	http.ListenAndServe("127.0.0.1:"+strconv.Itoa(runtimeCfg.Port), nil)
+	webui.InitWebUI(g, runtimeCfg.Port)
 
 	// Handle signals
 	g.Go(func() error {
