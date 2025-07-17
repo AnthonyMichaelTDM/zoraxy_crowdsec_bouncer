@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
