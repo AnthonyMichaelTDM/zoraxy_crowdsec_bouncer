@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
@@ -450,6 +451,8 @@ var (
 		ReleaseLink   string
 		err           error
 	}
+	versionCheckRateLimit = 24 * time.Hour // Check for updates at most once every 24 hours
+	versionCheckLastCheck = time.Time{}
 )
 
 func storeVersionCheckResult(latestVersion, releaseLink string, err error) {
@@ -462,6 +465,9 @@ func storeVersionCheckResult(latestVersion, releaseLink string, err error) {
 		ReleaseLink:   releaseLink,
 		err:           err,
 	}
+	if err != nil {
+		versionCheckLastCheck = time.Now()
+	}
 }
 
 // Uses the GitHub API to check the latest version of the plugin.
@@ -470,6 +476,10 @@ func versionCheck() (string, string, error) {
 	const ENDPOINT = "https://api.github.com/repos/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/tags"
 	const HEADER_KEY = "Accept"
 	const HEADER_VALUE = "application/vnd.github.v3+json"
+
+	if time.Since(versionCheckLastCheck) < versionCheckRateLimit {
+		versionCheckOnce = sync.Once{} // Reset for next call
+	}
 
 	versionCheckOnce.Do(func() {
 		// build the request
