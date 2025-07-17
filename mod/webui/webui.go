@@ -18,6 +18,45 @@ const (
 	<title>Zoraxy Crowdsec Bouncer Debug UI</title>
 	<meta charset="UTF-8">
 	<style>
+        /* Make the page inherit parent theme colors */
+        html, body {
+            background-color: transparent !important;
+            color: inherit;
+            font-family: inherit;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        /* Ensure links are visible in both themes */
+        a {
+            color: #007bff;
+        }
+        
+        /* Dark theme adjustments */
+        @media (prefers-color-scheme: dark) {
+            a {
+                color: #4dabf7;
+            }
+            
+            pre {
+                background-color: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+                padding: 10px;
+            }
+        }
+        
+        /* Light theme adjustments */
+        @media (prefers-color-scheme: light) {
+            pre {
+                background-color: #f8f9fa;
+                border: 1px solid #dee2e6;
+                border-radius: 4px;
+                padding: 10px;
+            }
+        }
+        
+        /* Tooltip styling */
         .tooltip {
             position: relative;
             display: inline-block;
@@ -28,13 +67,13 @@ const (
         .tooltip .tooltiptext {
             visibility: hidden;
             width: 300px;
-            background-color: #555;
+            background-color: #333;
             color: #fff;
             text-align: center;
             border-radius: 6px;
-            padding: 5px;
+            padding: 8px;
             position: absolute;
-            z-index: 1;
+            z-index: 1000;
             bottom: 125%%;
             left: 50%%;
             margin-left: -150px;
@@ -42,6 +81,7 @@ const (
             transition: opacity 0.3s;
             font-size: 12px;
             word-wrap: break-word;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
         
         .tooltip .tooltiptext::after {
@@ -52,13 +92,24 @@ const (
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: #555 transparent transparent transparent;
+            border-color: #333 transparent transparent transparent;
         }
         
         .tooltip:hover .tooltiptext {
             visibility: visible;
             opacity: 1;
         }
+        
+        /* Better pre formatting for both themes */
+        pre {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
     </style>
 </head>
 <body>
