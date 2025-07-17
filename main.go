@@ -9,14 +9,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
-	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/webui"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/web"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	"github.com/crowdsecurity/crowdsec/pkg/models"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
@@ -171,8 +170,7 @@ func main() {
 		CaptureHandler(logger, w, r)
 	})
 
-	fmt.Println("Zoraxy Crowdsec Bouncer started at http://127.0.0.1:" + strconv.Itoa(runtimeCfg.Port))
-	webui.InitWebUI(g, runtimeCfg.Port)
+	web.InitWebUI(g, runtimeCfg.Port)
 
 	// Handle signals
 	g.Go(func() error {

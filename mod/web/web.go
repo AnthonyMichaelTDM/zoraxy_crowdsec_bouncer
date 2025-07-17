@@ -1,4 +1,4 @@
-package webui
+package web
 
 import (
 	"encoding/json"
@@ -558,7 +558,7 @@ func InitWebUI(g *errgroup.Group, port int) {
 	http.HandleFunc(info.UI_PATH+"/", renderDebugUI)
 	g.Go(func() error {
 		serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		fmt.Printf("Starting web UI on %s\n", serverAddr)
+		fmt.Printf("Zoraxy Crowdsec Bouncer started at %s/%s\n", serverAddr, info.UI_PATH)
 		return http.ListenAndServe(serverAddr, nil)
 	})
 }
