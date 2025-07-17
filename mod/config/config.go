@@ -19,6 +19,18 @@ type PluginConfig struct {
 	LogLevel logrus.Level `yaml:"-"`
 }
 
+func (p *PluginConfig) PostProcess() error {
+	// This function can be used to perform any post-processing on the configuration
+	// For now, it populates the LogLevel based on the LogLevelString
+	// parse the log level string into a logrus Level
+	level, err := logrus.ParseLevel(p.LogLevelString)
+	if err != nil {
+		return fmt.Errorf("unable to parse log level: %w", err)
+	}
+	p.LogLevel = level
+	return nil
+}
+
 func (p *PluginConfig) LoadConfig() error {
 	configFile, err := os.Open(info.CONFIGURATION_FILE)
 	if err != nil {
@@ -31,15 +43,13 @@ func (p *PluginConfig) LoadConfig() error {
 		return fmt.Errorf("unable to read configuration: %w", err)
 	}
 
-	err = yaml.Unmarshal(content, p)
-	if err != nil {
+	if err := yaml.Unmarshal(content, p); err != nil {
 		return fmt.Errorf("unable to unmarshal config file: %w", err)
 	}
 
 	// parse the log level string into a logrus Level
-	p.LogLevel, err = logrus.ParseLevel(p.LogLevelString)
-	if err != nil {
-		return fmt.Errorf("unable to parse log level: %w", err)
+	if err := p.PostProcess(); err != nil {
+		return fmt.Errorf("unable to post-process config: %w", err)
 	}
 
 	return nil
