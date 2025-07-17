@@ -3,59 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/dynamiccapture"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/web"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
-	"github.com/crowdsecurity/crowdsec/pkg/models"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"gopkg.in/yaml.v2"
 )
-
-type PluginConfig struct {
-	APIKey                    string `yaml:"api_key"`
-	AgentUrl                  string `yaml:"agent_url"`
-	LogLevelString            string `yaml:"log_level"`
-	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
-
-	LogLevel logrus.Level `yaml:"-"`
-}
-
-func (p *PluginConfig) loadConfig() error {
-	configFile, err := os.Open(info.CONFIGURATION_FILE)
-	if err != nil {
-		return fmt.Errorf("unable to open config file: %w", err)
-	}
-	defer configFile.Close()
-
-	content, err := io.ReadAll(configFile)
-	if err != nil {
-		return fmt.Errorf("unable to read configuration: %w", err)
-	}
-
-	err = yaml.Unmarshal(content, p)
-	if err != nil {
-		return fmt.Errorf("unable to unmarshal config file: %w", err)
-	}
-
-	// parse the log level string into a logrus Level
-	p.LogLevel, err = logrus.ParseLevel(p.LogLevelString)
-	if err != nil {
-		return fmt.Errorf("unable to parse log level: %w", err)
-	}
-
-	return nil
-}
 
 func main() {
 	// Serve the plugin introspect
@@ -84,20 +46,20 @@ func main() {
 	}
 
 	// load the configuration
-	config := &PluginConfig{}
-	if err := config.loadConfig(); err != nil {
+	pluginConfig := &config.PluginConfig{}
+	if err := pluginConfig.LoadConfig(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		panic(err)
 	}
 
 	// initialize the logger
 	logger := logrus.StandardLogger()
-	logger.Level = config.LogLevel
+	logger.Level = pluginConfig.LogLevel
 
 	// Initialize the Crowdsec bouncer
 	bouncer := &csbouncer.LiveBouncer{
-		APIKey:    config.APIKey,
-		APIUrl:    config.AgentUrl,
+		APIKey:    pluginConfig.APIKey,
+		APIUrl:    pluginConfig.AgentUrl,
 		UserAgent: info.BOUNCER_TYPE + "-" + info.VERSION_STRING,
 	}
 	if err := bouncer.Init(); err != nil {
@@ -107,7 +69,7 @@ func main() {
 
 	// initialize the path router
 	pathRouter := plugin.NewPathRouter()
-	pathRouter.SetDebugPrintMode(config.LogLevel >= logrus.DebugLevel)
+	pathRouter.SetDebugPrintMode(pluginConfig.LogLevel >= logrus.DebugLevel)
 
 	// errGroup and context for the metrics provider and bouncer
 	g, ctx := errgroup.WithContext(context.Background())
@@ -142,10 +104,10 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		return SniffHandler(logger, metricsHandler, ctx, config, dsfr, bouncer)
+		return dynamiccapture.SniffHandler(logger, metricsHandler, ctx, pluginConfig, dsfr, bouncer)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
-		CaptureHandler(logger, w, r)
+		dynamiccapture.CaptureHandler(logger, w, r)
 	})
 
 	web.InitWebUI(g, runtimeCfg.Port)
@@ -159,70 +121,4 @@ func main() {
 	} else {
 		logger.Info("process terminated gracefully")
 	}
-}
-
-// The Sniff handler is what decides whether to accept or skip a request
-// It is called for each request
-//
-// TODO: if/when we support captchas, we should maybe add a header to the request, or something
-func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler, parent context.Context, config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
-	defer metricsHandler.MarkRequestProcessed(dsfr.Hostname)
-
-	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
-	defer cancel()
-
-	// Check if the request has a response in the bouncer
-	ip, err := utils.GetRealIP(logger, dsfr, config.IsProxiedBehindCloudflare)
-	if err != nil {
-		logger.Warnf("GetRealIP Got an error: %v for request: %s", err, dsfr.GetRequest().RequestURI)
-		return plugin.SniffResultSkip // Skip the request if there is an error
-	}
-
-	response, err := bouncer.Get(ctx, ip)
-	if err != nil {
-		logger.Warnf("Error getting decisions: %v", err)
-		return plugin.SniffResultSkip // Skip the request if there is an error
-	}
-	if len(*response) == 0 {
-		logger.Debugf("No decision found for IP: %s", ip)
-		return plugin.SniffResultSkip // Skip the request if there is no decision
-	}
-
-	// If we have one or more decisions, we will use the first one
-	var decision *models.Decision
-	for _, d := range *response {
-		if *d.Type == "ban" {
-			decision = d
-			break // We found a ban decision, we can stop looking
-		}
-	}
-
-	// Print the decisions for debugging
-	for _, d := range *response {
-		logger.Debugf("decisions: IP: %s | Scenario: %s | Duration: %s | Scope : %v\n", *d.Value, *d.Scenario, *d.Duration, *d.Scope)
-	}
-
-	// Since we have a decision, and this is a naive bouncer, we
-	// will ban all requests that have a decision
-	logger.Debugf("Decision found for IP: %s", ip)
-	metricsHandler.MarkRequestDropped(dsfr.Hostname, decision)
-	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler)
-}
-
-// The Capture handler is what handles the requests that were accepted by the Sniff handler
-// It is called for each request that was accepted by the Sniff handler.
-//
-// If the request was accepted, that means that there is a decision for the request IP,
-//
-// TODO: implement a way to present a captcha if the decision is to present a captcha
-func CaptureHandler(logger *logrus.Logger, w http.ResponseWriter, r *http.Request) {
-	// This is the dynamic capture handler where it actually captures and handle the request
-
-	// it would be really funny if we could return a 5 petabyte zip bomb or something,
-	// but let's not...
-
-	w.WriteHeader(http.StatusForbidden)
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("Forbidden"))
-	logger.Infof("Request blocked: %s", r.RequestURI)
 }
