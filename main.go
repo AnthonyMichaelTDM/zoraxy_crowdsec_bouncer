@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -110,15 +111,16 @@ func main() {
 		dynamiccapture.CaptureHandler(logger, w, r)
 	})
 
-	web.InitWebUI(g, runtimeCfg.Port)
+	web.InitWebServer(logger, g, ctx, runtimeCfg.Port)
 
 	// Handle signals
-	utils.StartSignalHandler(logger, g)
+	utils.StartSignalHandler(logger, g, ctx)
 
-	// wait for the goroutine to finish
-	if err := g.Wait(); err != nil {
-		logger.Fatalf("process terminated with error: %v", err)
+	// wait for the goroutines to finish
+	if err := g.Wait(); err != nil && !(errors.Is(err, utils.SignalTermError) || errors.Is(err, utils.SignalIntError)) {
+		fmt.Printf("Process terminated with error of type %T: %v\n", err, err)
+		logrus.Fatalf("process terminated with error: %v", err)
 	} else {
-		logger.Info("process terminated gracefully")
+		logrus.Info("process terminated gracefully")
 	}
 }

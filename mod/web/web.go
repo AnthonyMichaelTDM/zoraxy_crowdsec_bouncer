@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -11,7 +12,9 @@ import (
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -554,11 +557,44 @@ func renderDebugUI(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 }
 
-func InitWebUI(g *errgroup.Group, port int) {
-	http.HandleFunc(info.UI_PATH+"/", renderDebugUI)
+// InitWebServer initializes the web server and serves the plugin UI.
+// Also sets up a shutdown handler for graceful shutdown.
+//
+// Runs everything on the default serve mux.
+func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, port int) {
+	mux := http.DefaultServeMux
+
+	mux.HandleFunc(info.UI_PATH+"/", renderDebugUI) // Handle trailing slash
+
+
+	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
+	server := &http.Server{
+		Addr:    serverAddr,
+		Handler: mux,
+	}
+
 	g.Go(func() error {
-		serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
-		fmt.Printf("Zoraxy Crowdsec Bouncer started at %s/%s\n", serverAddr, info.UI_PATH)
-		return http.ListenAndServe(serverAddr, nil)
+		fmt.Printf("Zoraxy Crowdsec Bouncer started at %s%s\n", serverAddr, info.UI_PATH)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("web server failed: %w", err)
+		}
+		return nil
 	})
+	// Start a graceful shutdown handler
+	g.Go(func() error {
+		<-ctx.Done() // Wait for cancellation signal
+		return ShutdownWebServer(server, 30*time.Second)
+	})
+}
+
+func ShutdownWebServer(server *http.Server, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	logrus.Info("Shutting down web server...")
+	if err := server.Shutdown(ctx); err != nil {
+		return fmt.Errorf("web server shutdown failed: %w", err)
+	}
+	logrus.Info("Web server shutdown complete")
+	return nil
 }
