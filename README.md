@@ -79,6 +79,8 @@ In it, you can view some basic information about the bouncer, such as the number
 
 Additionally, the web UI will periodically check for updates and will tell you when an update is available.
 
+![](assets/WebUI-Update-Available.png)
+
 The web UI will match the theme of the Zoraxy web interface, if you have it in dark mode, the web UI will also be in dark mode.
 
 ### Dark Mode
