@@ -20,7 +20,7 @@ type metricName string
 type MetricUnit string
 
 const (
-	BLOCKED_REQUESTS   metricName = "zoraxy_bouncer_blocked_requests"
+	DROPPED_REQUESTS   metricName = "zoraxy_bouncer_blocked_requests"
 	PROCESSED_REQUESTS metricName = "zoraxy_bouncer_processed_requests"
 )
 
@@ -43,17 +43,17 @@ func (m metricMap) MustRegisterAll() {
 }
 
 var Map = metricMap{
-	BLOCKED_REQUESTS: {
-		Name: "blocked",
+	DROPPED_REQUESTS: {
+		Name: "dropped",
 		Unit: "request",
 		Gauge: prometheus.NewGaugeVec(prometheus.GaugeOpts{
-			Name: string(BLOCKED_REQUESTS),
-			Help: "Denotes the total number of requests blocked by the Zoraxy bouncer",
-		}, []string{"origin"}),
-		LabelKeys:    []string{"origin"},
+			Name: string(DROPPED_REQUESTS),
+			Help: "Denotes the total number of requests dropped by the Zoraxy bouncer",
+		}, []string{"origin", "hostname"}),
+		LabelKeys:    []string{"origin", "hostname"},
 		LastValueMap: make(map[string]float64),
 		KeyFunc: func(labels []*io_prometheus_client.LabelPair) string {
-			return getLabelValue(labels, "origin")
+			return getLabelValue(labels, "origin") + getLabelValue(labels, "hostname")
 		},
 	},
 	PROCESSED_REQUESTS: {
@@ -62,11 +62,11 @@ var Map = metricMap{
 		Gauge: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: string(PROCESSED_REQUESTS),
 			Help: "Denotes the total number of requests processed by the Zoraxy bouncer",
-		}, []string{"origin"}),
-		LabelKeys:    []string{"origin"},
+		}, []string{"hostname"}),
+		LabelKeys:    []string{"hostname"},
 		LastValueMap: make(map[string]float64),
 		KeyFunc: func(labels []*io_prometheus_client.LabelPair) string {
-			return getLabelValue(labels, "origin")
+			return getLabelValue(labels, "hostname")
 		},
 	},
 }
@@ -96,22 +96,22 @@ func NewMetricsHandler(logger *logrus.Logger) *MetricsHandler {
 	return mh
 }
 
-func (mh *MetricsHandler) MarkRequestBlocked(origin string) {
+func (mh *MetricsHandler) MarkRequestDropped(hostname string, decision *models.Decision) {
 	mh.Lock.Lock()
 	defer mh.Lock.Unlock()
 
-	// Increment the blocked requests metric
+	// Increment the dropped requests metric
 	// This is a simple counter, so we just increment the value
-	Map[BLOCKED_REQUESTS].Gauge.With(prometheus.Labels{"origin": origin}).Inc()
+	Map[DROPPED_REQUESTS].Gauge.With(prometheus.Labels{"origin": *decision.Origin, "hostname": hostname}).Inc()
 }
 
-func (mh *MetricsHandler) MarkRequestProcessed(origin string) {
+func (mh *MetricsHandler) MarkRequestProcessed(hostname string) {
 	mh.Lock.Lock()
 	defer mh.Lock.Unlock()
 
 	// Increment the processed requests metric
 	// This is a simple counter, so we just increment the value
-	Map[PROCESSED_REQUESTS].Gauge.With(prometheus.Labels{"origin": origin}).Inc()
+	Map[PROCESSED_REQUESTS].Gauge.With(prometheus.Labels{"hostname": hostname}).Inc()
 }
 
 // MetricsUpdater receives a metrics struct with basic data and populates it with the current metrics.

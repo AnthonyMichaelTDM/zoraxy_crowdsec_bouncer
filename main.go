@@ -18,6 +18,7 @@ import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/webui"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
+	"github.com/crowdsecurity/crowdsec/pkg/models"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
@@ -164,11 +165,9 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		metricsHandler.MarkRequestProcessed(dsfr.Hostname)
-		return SniffHandler(logger, ctx, config, dsfr, bouncer)
+		return SniffHandler(logger, metricsHandler, ctx, config, dsfr, bouncer)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
-		metricsHandler.MarkRequestBlocked(r.URL.Host)
 		CaptureHandler(logger, w, r)
 	})
 
@@ -297,7 +296,9 @@ IPFound:
 // It is called for each request
 //
 // TODO: if/when we support captchas, we should maybe add a header to the request, or something
-func SniffHandler(logger *logrus.Logger, parent context.Context, config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
+func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler, parent context.Context, config *PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, bouncer *csbouncer.LiveBouncer) plugin.SniffResult {
+	defer metricsHandler.MarkRequestProcessed(dsfr.Hostname)
+
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
 
@@ -318,14 +319,24 @@ func SniffHandler(logger *logrus.Logger, parent context.Context, config *PluginC
 		return plugin.SniffResultSkip // Skip the request if there is no decision
 	}
 
+	// If we have one or more decisions, we will use the first one
+	var decision *models.Decision
+	for _, d := range *response {
+		if *d.Type == "ban" {
+			decision = d
+			break // We found a ban decision, we can stop looking
+		}
+	}
+
 	// Print the decisions for debugging
-	for _, decision := range *response {
-		logger.Debugf("decisions: IP: %s | Scenario: %s | Duration: %s | Scope : %v\n", *decision.Value, *decision.Scenario, *decision.Duration, *decision.Scope)
+	for _, d := range *response {
+		logger.Debugf("decisions: IP: %s | Scenario: %s | Duration: %s | Scope : %v\n", *d.Value, *d.Scenario, *d.Duration, *d.Scope)
 	}
 
 	// Since we have a decision, and this is a naive bouncer, we
 	// will ban all requests that have a decision
 	logger.Debugf("Decision found for IP: %s", ip)
+	metricsHandler.MarkRequestDropped(dsfr.Hostname, decision)
 	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler)
 }
 

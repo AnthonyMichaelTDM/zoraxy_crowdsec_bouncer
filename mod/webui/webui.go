@@ -334,30 +334,30 @@ func renderMetrics() string {
 		metricName := mf.GetName()
 
 		// Only process our bouncer metrics
-		if metricName != string(metrics.BLOCKED_REQUESTS) && metricName != string(metrics.PROCESSED_REQUESTS) {
+		if metricName != string(metrics.DROPPED_REQUESTS) && metricName != string(metrics.PROCESSED_REQUESTS) {
 			continue
 		}
 
 		metricData[metricName] = make(map[string]float64)
 
 		for _, metric := range mf.GetMetric() {
-			var origin string = "unknown"
+			var hostname string = "unknown"
 
 			// Extract origin label
 			for _, label := range metric.GetLabel() {
-				if label.GetName() == "origin" {
-					origin = label.GetValue()
+				if label.GetName() == "hostname" {
+					hostname = label.GetValue()
 					break
 				}
 			}
 
 			value := metric.GetGauge().GetValue()
-			metricData[metricName][origin] = value
+			metricData[metricName][hostname] = value
 		}
 	}
 
 	// Render blocked requests card
-	if blocked, exists := metricData[string(metrics.BLOCKED_REQUESTS)]; exists {
+	if blocked, exists := metricData[string(metrics.DROPPED_REQUESTS)]; exists {
 		total := 0.0
 		breakdown := ""
 
@@ -387,10 +387,10 @@ func renderMetrics() string {
 		total := 0.0
 		breakdown := ""
 
-		for origin, count := range processed {
+		for hostname, count := range processed {
 			total += count
 			breakdown += fmt.Sprintf(`<div class="metric-breakdown-item"><span class="metric-label">%s</span><span class="metric-count">%.0f</span></div>`,
-				html.EscapeString(origin), count)
+				html.EscapeString(hostname), count)
 		}
 
 		if breakdown == "" {
@@ -409,7 +409,7 @@ func renderMetrics() string {
 	}
 
 	// Calculate and show block rate if we have both metrics
-	if blocked, blockedExists := metricData[string(metrics.BLOCKED_REQUESTS)]; blockedExists {
+	if blocked, blockedExists := metricData[string(metrics.DROPPED_REQUESTS)]; blockedExists {
 		if processed, processedExists := metricData[string(metrics.PROCESSED_REQUESTS)]; processedExists {
 			totalBlocked := 0.0
 			totalProcessed := 0.0
