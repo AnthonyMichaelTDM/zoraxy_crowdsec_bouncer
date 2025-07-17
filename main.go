@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/webui"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/prometheus/client_golang/prometheus"
@@ -172,7 +171,7 @@ func main() {
 		metricsHandler.MarkRequestBlocked(r.URL.Host)
 		CaptureHandler(logger, w, r)
 	})
-	http.HandleFunc(info.UI_PATH+"/", RenderDebugUI)
+	http.HandleFunc(info.UI_PATH+"/", webui.RenderDebugUI)
 
 	fmt.Println("Zoraxy Crowdsec Bouncer started at http://127.0.0.1:" + strconv.Itoa(runtimeCfg.Port))
 	http.ListenAndServe("127.0.0.1:"+strconv.Itoa(runtimeCfg.Port), nil)
@@ -347,22 +346,4 @@ func CaptureHandler(logger *logrus.Logger, w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("Forbidden"))
 	logger.Infof("Request blocked: %s", r.RequestURI)
-}
-
-// Render the debug UI
-func RenderDebugUI(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "**Zoraxy Crowdsec Bouncer UI Debug Interface**\n\n[Recv Headers] \n")
-
-	headerKeys := make([]string, 0, len(r.Header))
-	for name := range r.Header {
-		headerKeys = append(headerKeys, name)
-	}
-	sort.Strings(headerKeys)
-	for _, name := range headerKeys {
-		values := r.Header[name]
-		for _, value := range values {
-			fmt.Fprintf(w, "%s: %s\n", name, html.EscapeString(value))
-		}
-	}
-	w.Header().Set("Content-Type", "text/html")
 }
