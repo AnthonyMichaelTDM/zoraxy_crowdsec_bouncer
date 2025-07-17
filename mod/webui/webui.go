@@ -6,71 +6,66 @@ import (
 	"html"
 	"net/http"
 	"sort"
+	"sync"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/prometheus/client_golang/prometheus"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	TEMPLATE = `
-<!DOCTYPE html>
-<html>
-<head>
-	<title>Zoraxy Crowdsec Bouncer Debug UI</title>
-	<meta charset="UTF-8">
-	<style>
+	STYLE = `
+<style>
         /* Make the page inherit parent theme colors */
         html, body {
-            background-color: transparent !important;
             color: inherit;
+			background-color: var(--theme_bg_primary) !important;
             font-family: inherit;
             margin: 0;
             padding: 20px;
         }
-        
+		
         /* Ensure links are visible in both themes */
         a {
-            color: #007bff;
-        }
-        
-        /* Dark theme adjustments */
-        @media (prefers-color-scheme: dark) {
-            a {
-                color: #4dabf7;
-            }
-            
-            pre {
-                background-color: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 4px;
-                padding: 10px;
-            }
-        }
-        
-        /* Light theme adjustments */
-        @media (prefers-color-scheme: light) {
-            pre {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 4px;
-                padding: 10px;
-            }
-        }
-        
+			color: #4dabf7 !important;
+		}
+
+		h1, h2, h3, h4, h5, h6 {
+			color: var(--item_color) !important;
+		}
+		
+		p {
+			color: var(--item_color) !important;
+		}
+
+		pre {
+			background-color: var(--theme_bg);
+			border: 1px solid rgba(255, 255, 255, 0.1);
+			border-radius: 4px;
+			padding: 10px;
+			color: var(--item_color);
+			font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+		}
+       
         /* Tooltip styling */
         .tooltip {
             position: relative;
             display: inline-block;
             cursor: help;
-            color: #dc3545;
+            color: --color(--theme_red);
         }
         
         .tooltip .tooltiptext {
             visibility: hidden;
             width: 300px;
-            background-color: #333;
-            color: #fff;
+            background-color: var(--theme_bg);
+            color: var(--text_color);
             text-align: center;
             border-radius: 6px;
             padding: 8px;
@@ -94,22 +89,12 @@ const (
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: #333 transparent transparent transparent;
+            border-color: var(--theme_divider) transparent transparent transparent;
         }
         
         .tooltip:hover .tooltiptext {
             visibility: visible;
             opacity: 1;
-        }
-        
-        /* Better pre formatting for both themes */
-        pre {
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
         }
         
         /* Metrics dashboard styling */
@@ -121,41 +106,43 @@ const (
         }
         
         .metric-card {
+			background-color: var(--theme_bg);
+            border: 1px solid var(--theme_divider);
+			color: var(--text_color);
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
-        
-        @media (prefers-color-scheme: dark) {
-            .metric-card {
-                background-color: rgba(255, 255, 255, 0.05);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-            }
-        }
-        
-        @media (prefers-color-scheme: light) {
-            .metric-card {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-            }
-        }
-        
+
         .metric-title {
             font-size: 16px;
             font-weight: bold;
             margin-bottom: 10px;
-            color: inherit;
+			color: var(--text_color);
         }
         
         .metric-value {
             font-size: 24px;
             font-weight: bold;
             margin-bottom: 5px;
+			color: var(--text_color);
         }
         
         .metric-description {
             font-size: 12px;
             opacity: 0.8;
+			color: var(--text_color);
+        }
+    
+        
+        .metric-label {
+            font-weight: 500;
+			color: var(--text_color);
+        }
+        
+        .metric-count {
+            font-weight: bold;
+			color: var(--text_color);
         }
         
         .metric-breakdown {
@@ -172,31 +159,138 @@ const (
         .metric-breakdown-item:last-child {
             border-bottom: none;
         }
-        
-        .metric-label {
-            font-weight: 500;
+
+        /* Metrics header with refresh button */
+        .metrics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
         }
         
-        .metric-count {
-            font-weight: bold;
+        .refresh-button {
+            background-color: transparent;
+            color: inherit;
+            border: 1px solid rgba(128, 128, 128, 0.3);
+            border-radius: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            opacity: 0.7;
+			color: var(--text_color);
+        }
+        
+        .refresh-button:hover {
+            opacity: 1;
+            border-color: rgba(128, 128, 128, 0.5);
+            background-color: rgba(128, 128, 128, 0.1);
+			color: var(--text_color);
+        }
+        
+        .refresh-button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            border-color: rgba(128, 128, 128, 0.2);
+			color: var(--text_color_inverted);
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border: 2px solid var(--theme_bg_inverted);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
+	`
+	SCRIPT = `
+<script>
+		// Function to refresh metrics dashboard
+        let refreshing = false;
+        async function refreshMetrics() {
+            if (refreshing) return;
+            
+            refreshing = true;
+            const button = document.getElementById('refresh-btn');
+            const originalText = button.innerHTML;
+            
+            // Show loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner"></span> Refreshing...';
+            
+            try {
+                // Fetch updated metrics
+                const response = await fetch(window.location.href);
+                const html = await response.text();
+                
+                // Parse the response and extract just the metrics section
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newMetrics = doc.querySelector('.metrics-dashboard');
+                
+                // Replace the current metrics dashboard
+                if (newMetrics) {
+                    document.querySelector('.metrics-dashboard').innerHTML = newMetrics.innerHTML;
+                }
+                
+                // Show success feedback briefly
+                button.innerHTML = '✓ Refreshed';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    refreshing = false;
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Failed to refresh metrics:', error);
+                button.innerHTML = '✗ Failed';
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                    refreshing = false;
+                }, 2000);
+            }
+        }
+    </script>
+`
+	TEMPLATE = `
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Zoraxy Crowdsec Bouncer Debug UI</title>
+	<meta charset="UTF-8">
+	<!-- style section --> %s
+    <!-- script section --> %s
+	<link rel="stylesheet" href="https://zoraxy.anthonyrubick.com/main.css">
+	<link rel="stylesheet" href="https://zoraxy.anthonyrubick.com/darktheme.css">
+	<script src="https://zoraxy.anthonyrubick.com/script/jquery-3.6.0.min.js"></script>
+	<script defer src="https://zoraxy.anthonyrubick.com/script/darktheme.js"></script>
 </head>
 <body>
 	<h1>Zoraxy Crowdsec Bouncer Debug UI</h1>
 	<h2>Plugin Information</h2>
-	<p>Version: %s</p>
+	<p>Version: <!-- version section --> %s</p>
 	<p>
 	GitHub Repository: <a href="https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer">https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer</a>
 	</p>
-	<h2>Metrics</h2>
+	<div class="metrics-header">
+		<h2>Metrics</h2>
+		<button id="refresh-btn" class="refresh-button" onclick="refreshMetrics()">Refresh</button>
+	</div>
 	<div class="metrics-dashboard">
-%s
+<!-- metrics --> %s
 	</div>
 
 	<h2>[Received Headers]</h2>
 	<pre>
-%s
+<!-- headers --> %s
 	</pre>
 </body>
 </html>
@@ -204,7 +298,7 @@ const (
 )
 
 // RenderHeaders renders the headers received in the request as HTML.
-func RenderHeaders(r *http.Request) string {
+func renderHeaders(r *http.Request) string {
 	var headerOutput string = ""
 
 	headerKeys := make([]string, 0, len(r.Header))
@@ -224,7 +318,7 @@ func RenderHeaders(r *http.Request) string {
 }
 
 // RenderMetrics renders the current metrics as HTML dashboard cards
-func RenderMetrics() string {
+func renderMetrics() string {
 	var output string
 
 	// Get metrics from Prometheus
@@ -349,6 +443,27 @@ func RenderMetrics() string {
 	return output
 }
 
+var (
+	versionCheckOnce   sync.Once
+	versionCheckResult struct {
+		LatestVersion string
+		ReleaseLink   string
+		err           error
+	}
+)
+
+func storeVersionCheckResult(latestVersion, releaseLink string, err error) {
+	versionCheckResult = struct {
+		LatestVersion string
+		ReleaseLink   string
+		err           error
+	}{
+		LatestVersion: latestVersion,
+		ReleaseLink:   releaseLink,
+		err:           err,
+	}
+}
+
 // Uses the GitHub API to check the latest version of the plugin.
 // Returns both the latest version and the release page URL.
 func versionCheck() (string, string, error) {
@@ -356,49 +471,64 @@ func versionCheck() (string, string, error) {
 	const HEADER_KEY = "Accept"
 	const HEADER_VALUE = "application/vnd.github.v3+json"
 
-	// build the request
-	req, err := http.NewRequest("GET", ENDPOINT, nil)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set(HEADER_KEY, HEADER_VALUE)
+	versionCheckOnce.Do(func() {
+		// build the request
+		req, err := http.NewRequest("GET", ENDPOINT, nil)
+		if err != nil {
+			storeVersionCheckResult("", "", fmt.Errorf("failed to create request: %w", err))
+			return
+		}
+		req.Header.Set(HEADER_KEY, HEADER_VALUE)
 
-	// send the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
+		// send the request
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			storeVersionCheckResult("", "", fmt.Errorf("failed to send request: %w", err))
+			return
+		}
+		defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
+		if resp.StatusCode != http.StatusOK {
+			storeVersionCheckResult("", "", fmt.Errorf("unexpected status code: %d", resp.StatusCode))
+			return
+		}
 
-	// parse the response
-	type releaseInfo struct {
-		Name string `json:"name"`
-	}
+		// parse the response
+		type releaseInfo struct {
+			Name string `json:"name"`
+		}
 
-	var releases []releaseInfo
-	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
-		return "", "", fmt.Errorf("failed to decode response: %w", err)
-	}
-	if len(releases) == 0 {
-		return "", "", fmt.Errorf("no releases found")
-	}
+		var releases []releaseInfo
+		if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+			storeVersionCheckResult("", "", fmt.Errorf("failed to decode response: %w", err))
+			return
+		}
+		if len(releases) == 0 {
+			storeVersionCheckResult("", "", fmt.Errorf("no releases found"))
+			return
+		}
 
-	// get the latest version
-	latestRelease := releases[0].Name
-	releaseLink := fmt.Sprintf("https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/tag/%s", latestRelease)
+		// get the latest version
+		latestRelease := releases[0].Name
+		releaseLink := fmt.Sprintf("https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/tag/%s", latestRelease)
 
-	return latestRelease, releaseLink, nil
+		// store the result
+		storeVersionCheckResult(latestRelease, releaseLink, nil)
+	})
+
+	if versionCheckResult.err != nil {
+		versionCheckOnce = sync.Once{} // Reset for next call
+		return "", "", versionCheckResult.err
+	} else {
+		return versionCheckResult.LatestVersion, versionCheckResult.ReleaseLink, nil
+	}
 }
 
 // Render the debug UI
-func RenderDebugUI(w http.ResponseWriter, r *http.Request) {
-	headersSection := RenderHeaders(r)
-	metricsSection := RenderMetrics()
+func renderDebugUI(w http.ResponseWriter, r *http.Request) {
+	headersSection := renderHeaders(r)
+	metricsSection := renderMetrics()
 	versionSection, link, err := versionCheck()
 	if err != nil {
 		versionSection = fmt.Sprintf(`%s <span class="tooltip">(version check failed)<span class="tooltiptext">%s</span></span>`,
@@ -410,6 +540,15 @@ func RenderDebugUI(w http.ResponseWriter, r *http.Request) {
 		versionSection = fmt.Sprintf("%s  <a href=\"%s\">(update available)</a>", info.VERSION_STRING, html.EscapeString(link))
 	}
 
-	fmt.Fprintf(w, TEMPLATE, versionSection, metricsSection, headersSection)
+	fmt.Fprintf(w, TEMPLATE, STYLE, SCRIPT, versionSection, metricsSection, headersSection)
 	w.Header().Set("Content-Type", "text/html")
+}
+
+func InitWebUI(g *errgroup.Group, port int) {
+	http.HandleFunc(info.UI_PATH+"/", renderDebugUI)
+	g.Go(func() error {
+		serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
+		fmt.Printf("Starting web UI on %s\n", serverAddr)
+		return http.ListenAndServe(serverAddr, nil)
+	})
 }
