@@ -70,3 +70,21 @@ You can get the API key by running the following command:
 ```bash
 sudo cscli bouncers add zoraxy-crowdsec-bouncer
 ```
+
+## Web UI
+
+The web UI is available from the Zoraxy web interface in the "Plugins" section.
+
+In it, you can view some basic information about the bouncer, such as the number of requests processed and dropped by the bouncer for each hostname.
+
+Additionally, the web UI will periodically check for updates and will tell you when an update is available.
+
+The web UI will match the theme of the Zoraxy web interface, if you have it in dark mode, the web UI will also be in dark mode.
+
+### Dark Mode
+
+![](assets/WebUI-Dark.png)
+
+### Light Mode
+
+![](assets/WebUI-Light.png)
