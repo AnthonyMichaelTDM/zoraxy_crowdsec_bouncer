@@ -1,6 +1,8 @@
 module github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer
 
-go 1.24.5
+go 1.24.4
+
+toolchain go1.24.5
 
 require (
 	github.com/crowdsecurity/crowdsec v1.6.10
