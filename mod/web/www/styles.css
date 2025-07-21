@@ -1,23 +1,10 @@
-/* Make the page inherit parent theme colors */
-html, body {
-    color: inherit;
-    background-color: var(--theme_bg_primary) !important;
-    font-family: inherit;
-    margin: 0;
-    padding: 20px;
+body {
+    background: none;
+    background-color: unset !important;
 }
 
-/* Ensure links are visible in both themes */
 a {
     color: #4dabf7 !important;
-}
-
-h1, h2, h3, h4, h5, h6 {
-    color: var(--item_color) !important;
-}
-
-p {
-    color: var(--item_color) !important;
 }
 
 pre {
@@ -25,8 +12,6 @@ pre {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     padding: 10px;
-    color: var(--item_color);
-    font-family: 'Courier New', monospace;
     font-size: 13px;
     line-height: 1.4;
     overflow-x: auto;
@@ -34,52 +19,9 @@ pre {
     word-wrap: break-word;
 }
 
-.error {
-    color: var(--theme_red);
-    font-weight: bold;
-}
-
 /* Tooltip styling */
 .tooltip {
-    position: relative;
-    display: inline-block;
     cursor: help;
-}
-
-.tooltip .tooltiptext {
-    visibility: hidden;
-    width: 300px;
-    background-color: var(--theme_bg);
-    color: var(--text_color);
-    text-align: center;
-    border-radius: 6px;
-    padding: 8px;
-    position: absolute;
-    z-index: 1000;
-    bottom: 125%%;
-    left: 50%%;
-    margin-left: -150px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    font-size: 12px;
-    word-wrap: break-word;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-}
-
-.tooltip .tooltiptext::after {
-    content: "";
-    position: absolute;
-    top: 100%%;
-    left: 50%%;
-    margin-left: -5px;
-    border-width: 5px;
-    border-style: solid;
-    border-color: var(--theme_divider) transparent transparent transparent;
-}
-
-.tooltip:hover .tooltiptext {
-    visibility: visible;
-    opacity: 1;
 }
 
 /* Metrics dashboard styling */

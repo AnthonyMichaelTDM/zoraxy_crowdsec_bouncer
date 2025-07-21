@@ -123,6 +123,8 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if totalProcessed > 0 {
 		response.BlockRate = (totalBlocked / totalProcessed) * 100
+	} else {
+		response.BlockRate = 0.0
 	}
 
 	json.NewEncoder(w).Encode(response)
