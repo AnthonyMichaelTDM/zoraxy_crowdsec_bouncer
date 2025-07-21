@@ -24,5 +24,17 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Build the application
+        run: go build -v ./...
+
       - name: Run tests
         run: go test ./... -v
+
+      - name: Lint code
+        run: go vet ./...
+
+      - name: install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck
+        run: staticcheck ./...
