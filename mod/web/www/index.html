@@ -9,37 +9,49 @@
     <link rel="stylesheet" href="/script/semantic/semantic.min.css">
     <script src="/script/jquery-3.6.0.min.js"></script>
     <script src="/script/semantic/semantic.min.js"></script>
-	<link rel="stylesheet" href="/main.css">
     <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-	<!-- Dark theme script must be included after body tag-->
-	<link rel="stylesheet" href="/darktheme.css">
-	<script src="/script/darktheme.js"></script>
+<!-- Dark theme script must be included after body tag-->
+<link rel="stylesheet" href="/darktheme.css">
+<script src="/script/darktheme.js"></script>
+<div class="ui container">
+	<div class="ui basic segment">
+		<h1>Zoraxy Crowdsec Bouncer Debug UI</h1>
+		
+		<h2>Plugin Information</h2>
+		<p>Version: <span id="version-info">Loading...</span></p>
+		<p>
+			GitHub Repository: <a href="https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer">https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer</a>
+		</p>
+	</div>
+    <div class="ui divider"></div>
 
-    <h1>Zoraxy Crowdsec Bouncer Debug UI</h1>
-    
-    <h2>Plugin Information</h2>
-    <p>Version: <span id="version-info">Loading...</span></p>
-    <p>
-        GitHub Repository: <a href="https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer">https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer</a>
-    </p>
-    
-    <div class="metrics-header">
-        <h2>Metrics</h2>
-        <button id="refresh-btn" class="refresh-button" onclick="refreshMetrics()">Refresh</button>
-    </div>
-    <div class="metrics-dashboard" id="metrics-dashboard">
-        <div class="metric-card">
-            <div class="metric-title">Loading...</div>
-            <div class="metric-description">Please wait while metrics are loading</div>
-        </div>
-    </div>
+	<div class="ui basic segment">
+		<h2>Metrics</h2>
+		<button id="refresh-btn" class="ui basic small button" onclick="refreshMetrics()">
+			<i class="refresh icon"></i>
+			Refresh
+		</button>
 
-    <h2>[Received Headers]</h2>
-    <pre id="headers-display">Loading...</pre>
+		<div class="metrics-dashboard" id="metrics-dashboard">
+			<div class="metric-card">
+				<div class="metric-title">Loading...</div>
+				<div class="metric-description">Please wait while metrics are loading</div>
+			</div>
+		</div>
+	</div>
+	
+	<div class="ui divider"></div>
 
-    <script>
+	<div class="ui basic segment">
+    	<h2>[Received Headers]</h2>
+    	<pre id="headers-display">Loading...</pre>
+	</div>
+
+</div>
+
+	<script>
         // Global state
         let refreshing = false;
         
@@ -66,7 +78,7 @@
 					let versionText = escapeHtml(data.version);
 
 					if (data.checkError) {
-						versionText += ` <span class="tooltip error">(version check failed)<span class="tooltiptext">${escapeHtml(data.checkError)}</span></span>`;
+						versionText += ` <span class="tooltip" data-tooltip="${escapeHtml(data.checkError)}" data-inverted="" data-position="top left">(version check failed)</span>`;
 					} else if (data.isLatest) {
 						versionText += ' (latest)';
 					} else {
@@ -91,7 +103,7 @@
 					// If there's an error, show it
 					if (data.error) {
 						metricsDashboard.innerHTML = `
-							<div class="metric-card">
+							<div class="ui message error">
 								<div class="metric-title">Error</div>
 								<div class="metric-description error">${wrapError(data.error)}</div>
 							</div>
@@ -104,79 +116,61 @@
 
 					// Blocked requests card
 					const blockedTotal = Object.values(data.blockedRequests).reduce((sum, val) => sum + val, 0);
-					if (blockedTotal > 0 || Object.keys(data.blockedRequests).length > 0) {
-						let breakdown = '';
-						if (Object.keys(data.blockedRequests).length === 0) {
-							breakdown = '<div class="metric-breakdown-item"><span class="metric-label">No data</span><span class="metric-count">0</span></div>';
-						} else {
-							for (const [hostname, count] of Object.entries(data.blockedRequests)) {
-								breakdown += `<div class="metric-breakdown-item"><span class="metric-label">${escapeHtml(hostname)}</span><span class="metric-count">${count}</span></div>`;
-							}
+					let breakdown = '';
+					if (Object.keys(data.blockedRequests).length > 0) {
+						for (const [hostname, count] of Object.entries(data.blockedRequests)) {
+							breakdown += `<div class="metric-breakdown-item"><span class="metric-label">${escapeHtml(hostname)}</span><span class="metric-count">${count}</span></div>`;
 						}
-
-						html += `
-							<div class="metric-card">
-								<div class="metric-title">Blocked Requests</div>
-								<div class="metric-value">${blockedTotal}</div>
-								<div class="metric-description">Total requests blocked by CrowdSec decisions</div>
-								<div class="metric-breakdown">
-									${breakdown}
-								</div>
-							</div>
-						`;
+					} else {
+						breakdown = '<div class="metric-breakdown-item"><span class="metric-label">No data</span><span class="metric-count">0</span></div>';
 					}
+					html += `
+						<div class="metric-card">
+							<div class="metric-title">Blocked Requests</div>
+							<div class="metric-value">${blockedTotal}</div>
+							<div class="metric-description">Total requests blocked by CrowdSec decisions</div>
+							<div class="metric-breakdown">
+								${breakdown}
+							</div>
+						</div>
+					`;
 
 					// Processed requests card
 					const processedTotal = Object.values(data.processedRequests).reduce((sum, val) => sum + val, 0);
-					if (processedTotal > 0 || Object.keys(data.processedRequests).length > 0) {
-						let breakdown = '';
-						if (Object.keys(data.processedRequests).length === 0) {
-							breakdown = '<div class="metric-breakdown-item"><span class="metric-label">No data</span><span class="metric-count">0</span></div>';
-						} else {
-							for (const [hostname, count] of Object.entries(data.processedRequests)) {
-								breakdown += `<div class="metric-breakdown-item"><span class="metric-label">${escapeHtml(hostname)}</span><span class="metric-count">${count}</span></div>`;
-							}
+					breakdown = '';
+					if (Object.keys(data.processedRequests).length > 0) {
+						for (const [hostname, count] of Object.entries(data.processedRequests)) {
+							breakdown += `<div class="metric-breakdown-item"><span class="metric-label">${escapeHtml(hostname)}</span><span class="metric-count">${count}</span></div>`;
 						}
-						
-						html += `
-							<div class="metric-card">
-								<div class="metric-title">Processed Requests</div>
-								<div class="metric-value">${processedTotal}</div>
-								<div class="metric-description">Total requests processed by the bouncer</div>
-								<div class="metric-breakdown">
-									${breakdown}
-								</div>
-							</div>
-						`;
+					} else {
+						breakdown = '<div class="metric-breakdown-item"><span class="metric-label">No data</span><span class="metric-count">0</span></div>';
 					}
+					html += `
+						<div class="metric-card">
+							<div class="metric-title">Processed Requests</div>
+							<div class="metric-value">${processedTotal}</div>
+							<div class="metric-description">Total requests processed by the bouncer</div>
+							<div class="metric-breakdown">
+								${breakdown}
+							</div>
+						</div>
+					`;
 					
 					// Block rate card
-					if (blockedTotal > 0 || processedTotal > 0) {
-						html += `
-							<div class="metric-card">
-								<div class="metric-title">Block Rate</div>
-								<div class="metric-value">${data.blockRate.toFixed(1)}%</div>
-								<div class="metric-description">Percentage of requests blocked</div>
-							</div>
-						`;
-					}
+					html += `
+						<div class="metric-card">
+							<div class="metric-title">Block Rate</div>
+							<div class="metric-value">${data.blockRate.toFixed(1)}%</div>
+							<div class="metric-description">Percentage of requests blocked</div>
+						</div>
+					`;
 					
-					// If no metrics, show placeholder
-					if (html === '') {
-						html = `
-							<div class="metric-card">
-								<div class="metric-title">No Metrics Available</div>
-								<div class="metric-description">Start processing requests to see metrics data</div>
-							</div>
-						`;
-					}
-
 					// Render the metrics dashboard
 					metricsDashboard.innerHTML = html;
 				},
 				error: function(xhr, status, error) {
 					metricsDashboard.innerHTML = `
-						<div class="metric-card">
+						<div class="ui message error three columns">
 							<div class="metric-title">Error</div>
 							<div class="metric-description error">${wrapError(`Failed to fetch metrics: ${xhr.status} ${xhr.statusText}`)}</div>
 						</div>
@@ -219,31 +213,27 @@
             if (refreshing) return;
             
             refreshing = true;
+			$("#refresh-btn").addClass("loading")
             const button = document.getElementById('refresh-btn');
             const originalText = button.innerHTML;
-            
-            // Show loading state
-            button.disabled = true;
-            button.innerHTML = '<span class="spinner"></span> Refreshing...';
-            
+			button.disabled = true;
+
             try {
                 await fetchMetrics();
                 
                 // Show success feedback briefly
-                button.innerHTML = '✓ Refreshed';
                 setTimeout(() => {
-                    button.innerHTML = originalText;
                     button.disabled = false;
                     refreshing = false;
+					$("#refresh-btn").removeClass("loading")
                 }, 1000);
                 
             } catch (error) {
                 console.error('Failed to refresh metrics:', error);
-                button.innerHTML = '✗ Failed';
                 setTimeout(() => {
-                    button.innerHTML = originalText;
                     button.disabled = false;
                     refreshing = false;
+					$("#refresh-btn").removeClass("loading")
                 }, 2000);
             }
         }
