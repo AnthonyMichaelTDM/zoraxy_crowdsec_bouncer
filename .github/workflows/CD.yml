@@ -25,7 +25,8 @@ jobs:
       run: go mod download
 
     - name: Build
-      run: go build -o zoraxycrowdsecbouncer |
+      run: |
+           go build -o zoraxycrowdsecbouncer
            chmod +x zoraxycrowdsecbouncer
 
     - name: generate checksums
