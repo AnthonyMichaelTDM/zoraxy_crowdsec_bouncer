@@ -1,13 +1,11 @@
 module github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer
 
-go 1.24.4
-
-toolchain go1.24.5
+go 1.24.6
 
 require (
-	github.com/crowdsecurity/crowdsec v1.6.10
+	github.com/crowdsecurity/crowdsec v1.7.0
 	github.com/crowdsecurity/go-cs-bouncer v0.0.17-0.20250708125915-2ee9e98dab3c
-	github.com/crowdsecurity/go-cs-lib v0.0.20
+	github.com/crowdsecurity/go-cs-lib v0.0.21
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
 	github.com/sirupsen/logrus v1.9.3
@@ -21,6 +19,7 @@ require (
 	github.com/blackfireio/osinfo v1.1.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/corazawaf/coraza/v3 v3.3.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/expr-lang/expr v1.17.5 // indirect
 	github.com/go-openapi/analysis v0.23.0 // indirect
