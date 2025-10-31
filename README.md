@@ -14,6 +14,17 @@ For now, it uses a live bouncer, which queries the Crowdsec API for decisions on
 
 ## Installation
 
+> [!warning] 
+> These instructions are assuming you have a similar setup to me, that is, are running zoraxy more-or-less bare metal (I'm using an LXC, but the idea is the same).
+> 
+> They are known to be inaccurate if you run Zoraxy in a docker container, see the following
+> - https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-14613481
+> 
+> The gist seems to be that you need to:
+> - put your plugins in a dictory that you mount to `/opt/zoraxy/plugin/` instead of `/opt/zoraxy/plugins/`
+> - run crowdsec in another container on the **same virtual network** as Zoraxy (so they can talk to eachother), and make sure you mount your zoraxy logs to this container so crowdsec can monitor traffic
+
+
 <https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
 
 ### From GitHub Releases
@@ -51,6 +62,13 @@ cd zoraxycrowdsecbouncer
 go build
 chmod +x zoraxycrowdsecbouncer
 ```
+
+## Post installation
+
+After installing the plugin, and getting to the point where on the zoraxy dashboard you can see it and that it is healthy, you need to do one more thing to actually get it to work:
+- add the plugin to a tag, and also add every service you want protected to the same tag.
+
+You'll also need to do some setup with crowdsec, see https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-12566727
 
 ## Configuration
 
