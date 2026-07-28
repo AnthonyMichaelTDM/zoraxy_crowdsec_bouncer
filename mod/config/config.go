@@ -13,6 +13,7 @@ import (
 type PluginConfig struct {
 	APIKey                    string `yaml:"api_key"`
 	AgentUrl                  string `yaml:"agent_url"`
+	StreamUpdateFrequency     string `yaml:"stream_update_frequency"`
 	LogLevelString            string `yaml:"log_level"`
 	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
 
