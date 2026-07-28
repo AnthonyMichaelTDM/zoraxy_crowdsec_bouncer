@@ -29,7 +29,7 @@ func main() {
 		Name:          "Crowdsec Bouncer Plugin for Zoraxy",
 		Author:        "Anthony Rubick",
 		AuthorContact: "",
-		Description:   "This plugin is a Crowdsec bouncer for Zoraxy. It will block requests based on Crowdsec decisions.",
+		Description:   "Blocks requests using CrowdSec decisions. v1.2.2 adds a local decision-stream cache, eliminating a CrowdSec API lookup for every request.",
 		URL:           "https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer",
 		Type:          plugin.PluginType_Router,
 		VersionMajor:  info.VERSION_MAJOR,

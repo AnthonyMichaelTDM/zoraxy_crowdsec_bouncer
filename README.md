@@ -8,6 +8,8 @@ References:
 - [Crowdsec Documentation](https://docs.crowdsec.net/)
 - [go-cs-bouncer](https://github.com/crowdsecurity/go-cs-bouncer)
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 Since this needs to look at all incoming requests, it is implemented as a [Dynamic Capture Plugin](https://zoraxy.aroz.org/plugins/html/3.%20Basic%20Examples/4.%20Dynamic%20Capture%20Example.html).
 
 The bouncer uses CrowdSec's decision stream mode. It keeps active IP and CIDR ban decisions in memory, requests an initial snapshot at startup, and then periodically retrieves only decision deltas from CrowdSec. This avoids a Local API lookup for every proxied request.
