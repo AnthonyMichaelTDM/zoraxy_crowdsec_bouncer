@@ -29,6 +29,8 @@ func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler,
 		return plugin.SniffResultSkip // Skip the request if there is no decision
 	}
 
+	// This bouncer currently remediates ban decisions by handing the request
+	// to the capture handler, which returns a forbidden response.
 	logger.Debugf("Decision found for IP: %s", ip)
 	metricsHandler.MarkRequestDropped(dsfr.Hostname, decision)
 	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler

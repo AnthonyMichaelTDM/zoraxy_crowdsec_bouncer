@@ -10,6 +10,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const DefaultStreamUpdateFrequency = "10s"
+
 type PluginConfig struct {
 	APIKey                    string `yaml:"api_key"`
 	AgentUrl                  string `yaml:"agent_url"`
@@ -29,6 +31,9 @@ func (p *PluginConfig) PostProcess() error {
 		return fmt.Errorf("unable to parse log level: %w", err)
 	}
 	p.LogLevel = level
+	if p.StreamUpdateFrequency == "" {
+		p.StreamUpdateFrequency = DefaultStreamUpdateFrequency
+	}
 	return nil
 }
 

@@ -46,7 +46,7 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 	}
 }
 
-// GetBan returns a matching IP or CIDR ban decision, if any.
+// GetBan returns the most specific matching IP or CIDR ban decision, if any.
 func (c *Cache) GetBan(rawIP string) *models.Decision {
 	ip, err := netip.ParseAddr(rawIP)
 	if err != nil {
@@ -56,34 +56,50 @@ func (c *Cache) GetBan(rawIP string) *models.Decision {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
+	var best *models.Decision
+	bestSpecificity := -1
 	for _, decision := range c.decisions {
-		if decisionMatchesIP(decision, ip) {
-			return decision
+		specificity, matches := decisionMatchSpecificity(decision, ip)
+		if !matches {
+			continue
+		}
+		if best == nil || specificity > bestSpecificity || (specificity == bestSpecificity && decision.ID > best.ID) {
+			best = decision
+			bestSpecificity = specificity
 		}
 	}
 
-	return nil
+	return best
 }
 
-func decisionMatchesIP(decision *models.Decision, ip netip.Addr) bool {
+func decisionMatchSpecificity(decision *models.Decision, ip netip.Addr) (int, bool) {
 	if decision == nil || decision.Scope == nil || decision.Value == nil {
-		return false
+		return 0, false
 	}
 
 	switch strings.ToLower(*decision.Scope) {
 	case "ip":
 		decisionIP, err := netip.ParseAddr(*decision.Value)
 		if err == nil {
-			return decisionIP == ip
+			return decisionIP.BitLen() + 1, decisionIP == ip
 		}
 		// CAPI decisions may be represented as an IP scope with a /32 or
 		// /128 suffix, so accept a valid prefix here as well.
 		prefix, err := netip.ParsePrefix(*decision.Value)
-		return err == nil && prefix.Contains(ip)
+		if err != nil || !prefix.Contains(ip) {
+			return 0, false
+		}
+		if prefix.Bits() == ip.BitLen() {
+			return prefix.Bits() + 1, true
+		}
+		return prefix.Bits(), true
 	case "range":
 		prefix, err := netip.ParsePrefix(*decision.Value)
-		return err == nil && prefix.Contains(ip)
+		if err != nil || !prefix.Contains(ip) {
+			return 0, false
+		}
+		return prefix.Bits(), true
 	default:
-		return false
+		return 0, false
 	}
 }

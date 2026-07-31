@@ -46,3 +46,21 @@ func TestCacheIgnoresNonBanAndInvalidDecisions(t *testing.T) {
 		t.Fatalf("expected no matching ban, got %#v", got)
 	}
 }
+
+func TestCachePrefersExactIPThenMostSpecificRange(t *testing.T) {
+	cache := NewCache()
+	wideRange := decision(1, "range", "203.0.113.0/24", "ban")
+	narrowRange := decision(2, "range", "203.0.113.0/25", "ban")
+	exactIP := decision(3, "ip", "203.0.113.10", "ban")
+	equallySpecificNewerRange := decision(4, "range", "203.0.113.0/25", "ban")
+
+	cache.Apply(&models.DecisionsStreamResponse{New: []*models.Decision{wideRange, narrowRange, exactIP, equallySpecificNewerRange}})
+	if got := cache.GetBan("203.0.113.10"); got != exactIP {
+		t.Fatalf("expected exact IP decision, got %#v", got)
+	}
+
+	cache.Apply(&models.DecisionsStreamResponse{Deleted: []*models.Decision{exactIP}})
+	if got := cache.GetBan("203.0.113.10"); got != equallySpecificNewerRange {
+		t.Fatalf("expected deterministic most-specific range decision, got %#v", got)
+	}
+}
