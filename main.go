@@ -70,7 +70,6 @@ func main() {
 	}
 	if err := bouncer.Init(); err != nil {
 		logger.Fatalf("unable to initialize bouncer: %v", err)
-		panic(err)
 	}
 
 	// initialize the path router

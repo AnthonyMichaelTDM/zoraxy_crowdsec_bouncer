@@ -16,7 +16,7 @@ import (
 func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler, config *config.PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, decisions *decisions.Cache) plugin.SniffResult {
 	defer metricsHandler.MarkRequestProcessed(dsfr.Hostname)
 
-	// Check if the request has a response in the bouncer
+	// Look up the request IP in the local decision cache.
 	ip, err := utils.GetRealIP(logger, dsfr, config.IsProxiedBehindCloudflare)
 	if err != nil {
 		logger.Warnf("GetRealIP Got an error: %v for request: %s", err, dsfr.GetRequest().RequestURI)
