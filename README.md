@@ -8,9 +8,11 @@ References:
 - [Crowdsec Documentation](https://docs.crowdsec.net/)
 - [go-cs-bouncer](https://github.com/crowdsecurity/go-cs-bouncer)
 
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 Since this needs to look at all incoming requests, it is implemented as a [Dynamic Capture Plugin](https://zoraxy.aroz.org/plugins/html/3.%20Basic%20Examples/4.%20Dynamic%20Capture%20Example.html).
 
-For now, it uses a live bouncer, which queries the Crowdsec API for decisions on each request. However, in the future, it should be possible to use a static bouncer that stores deicisions in an in-memory cache or file and only queries the Crowdsec API for updates periodically.
+The bouncer uses CrowdSec's decision stream mode. It keeps active IP and CIDR ban decisions in memory, requests an initial snapshot at startup, and then periodically retrieves only decision deltas from CrowdSec. This avoids a Local API lookup for every proxied request.
 
 ## Installation
 
@@ -79,6 +81,7 @@ in the same directory as the plugin, there should be a `config.yaml` file with s
 ```yaml
 api_key: YOUR_API_KEY
 agent_url: http://127.0.0.1:8080 # for example
+stream_update_frequency: 10s # How often to retrieve decision deltas from CrowdSec
 log_level: warning # Log level for the bouncer, options: trace, debug, info, warning, error
 is_proxied_behind_cloudflare: true # Set to true if your zoraxy instance is proxied behind Cloudflare
 ```

@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/decisions"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/dynamiccapture"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
@@ -57,15 +58,18 @@ func main() {
 	logger := logrus.StandardLogger()
 	logger.Level = pluginConfig.LogLevel
 
-	// Initialize the Crowdsec bouncer
-	bouncer := &csbouncer.LiveBouncer{
-		APIKey:    pluginConfig.APIKey,
-		APIUrl:    pluginConfig.AgentUrl,
-		UserAgent: info.BOUNCER_TYPE + "-" + info.VERSION_STRING,
+	// Initialize the CrowdSec stream bouncer. It keeps the decision cache local
+	// and only requests deltas from LAPI at the configured interval.
+	bouncer := &csbouncer.StreamBouncer{
+		APIKey:              pluginConfig.APIKey,
+		APIUrl:              pluginConfig.AgentUrl,
+		UserAgent:           info.BOUNCER_TYPE + "-" + info.VERSION_STRING,
+		TickerInterval:      pluginConfig.StreamUpdateFrequency,
+		Scopes:              []string{"ip", "range"},
+		RetryInitialConnect: true,
 	}
 	if err := bouncer.Init(); err != nil {
 		logger.Fatalf("unable to initialize bouncer: %v", err)
-		panic(err)
 	}
 
 	// initialize the path router
@@ -74,6 +78,28 @@ func main() {
 
 	// errGroup and context for the metrics provider and bouncer
 	g, ctx := errgroup.WithContext(context.Background())
+	decisionCache := decisions.NewCache()
+
+	g.Go(func() error {
+		if err := bouncer.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case update, ok := <-bouncer.Stream:
+				if !ok {
+					return nil
+				}
+				decisionCache.Apply(update)
+			}
+		}
+	})
 
 	// initialize and start a metrics provider
 	metricsHandler := metrics.NewMetricsHandler(logger)
@@ -105,7 +131,7 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		return dynamiccapture.SniffHandler(logger, metricsHandler, ctx, pluginConfig, dsfr, bouncer)
+		return dynamiccapture.SniffHandler(logger, metricsHandler, pluginConfig, dsfr, decisionCache)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
 		dynamiccapture.CaptureHandler(logger, w, r)
