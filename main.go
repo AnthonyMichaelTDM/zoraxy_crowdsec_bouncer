@@ -63,7 +63,7 @@ func main() {
 	bouncer := &csbouncer.StreamBouncer{
 		APIKey:              pluginConfig.APIKey,
 		APIUrl:              pluginConfig.AgentUrl,
-		UserAgent:           info.BOUNCER_TYPE + "-" + info.VERSION_STRING,
+		UserAgent:           info.BOUNCER_USER_AGENT,
 		TickerInterval:      pluginConfig.StreamUpdateFrequency,
 		Scopes:              []string{"ip", "range"},
 		RetryInitialConnect: true,
