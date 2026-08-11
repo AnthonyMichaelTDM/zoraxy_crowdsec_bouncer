@@ -176,7 +176,7 @@ func StartPrometheusServer(logger *logrus.Logger, g *errgroup.Group, ctx context
 	g.Go(func() error {
 		logger.Infof("Prometheus metrics available at http://%s/metrics", listenAddr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("Prometheus metrics server failed: %w", err)
+			return fmt.Errorf("prometheus metrics server failed: %w", err)
 		}
 		return nil
 	})
