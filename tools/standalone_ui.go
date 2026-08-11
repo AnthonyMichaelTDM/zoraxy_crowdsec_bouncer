@@ -40,7 +40,7 @@ func main() {
 	web.InitWebServer(logger, g, ctx, PORT, web.ConfigStatusResponse{
 		Onboarding:      false,
 		BlockingEnabled: true,
-	}, events.NewBlockedEvents(events.DefaultCapacity))
+	}, events.NewBlockedEvents(events.DefaultCapacity, events.IPModeMasked))
 
 	// Handle signals
 	utils.StartSignalHandler(logrus.StandardLogger(), g, ctx)

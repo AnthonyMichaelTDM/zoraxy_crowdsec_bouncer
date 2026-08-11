@@ -117,6 +117,8 @@ agent_url: http://127.0.0.1:8080 # for example
 stream_update_frequency: 10s # How often to retrieve decision deltas from CrowdSec
 log_level: warning # Log level for the bouncer, options: trace, debug, info, warning, error
 is_proxied_behind_cloudflare: true # Set to true if your zoraxy instance is proxied behind Cloudflare
+# Display client IPs in Recent Blocked Connections: masked (default) or full
+blocked_events_ip_mode: masked
 ```
 
 You can get the API key by running the following command:
@@ -131,7 +133,9 @@ The web UI is available from the Zoraxy web interface in the "Plugins" section.
 
 In it, you can view some basic information about the bouncer, such as the number of requests processed and dropped by the bouncer for each hostname.
 
-The UI also shows the most recent 200 blocked connections from the current plugin session. To avoid retaining secrets, it stores only masked client networks, the hostname, request method and path (without query string), and CrowdSec decision metadata. It never stores request headers or bodies.
+The UI also shows the most recent 200 blocked connections from the current plugin session. It stores the hostname, request method and path (without query string), and CrowdSec decision metadata; it never stores request headers or bodies.
+
+`blocked_events_ip_mode` controls the client address shown in this table. The default, `masked`, stores IPv4 addresses as `/24` and IPv6 addresses as `/64` networks. Set it to `full` only when the Zoraxy administration UI is restricted to trusted users and you need exact IPs for incident correlation.
 
 ### Onboarding Mode
 

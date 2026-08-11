@@ -49,7 +49,7 @@ var runtimeConfigStatus = ConfigStatusResponse{
 	BlockingEnabled: true,
 }
 
-var blockedEventsStore = events.NewBlockedEvents(events.DefaultCapacity)
+var blockedEventsStore = events.NewBlockedEvents(events.DefaultCapacity, events.IPModeMasked)
 
 // API handlers
 func apiVersionHandler(w http.ResponseWriter, r *http.Request) {

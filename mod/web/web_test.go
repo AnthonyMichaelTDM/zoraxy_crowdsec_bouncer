@@ -14,7 +14,7 @@ import (
 func webStringPtr(value string) *string { return &value }
 
 func TestAPIBlockedEventsHandlerReturnsSanitizedEvents(t *testing.T) {
-	store := events.NewBlockedEvents(1)
+	store := events.NewBlockedEvents(1, events.IPModeMasked)
 	store.Record(&zoraxy_plugin.DynamicSniffForwardRequest{
 		Hostname:   "service.example",
 		Method:     http.MethodPost,
@@ -38,7 +38,7 @@ func TestAPIBlockedEventsHandlerReturnsSanitizedEvents(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(got) != 1 || got[0].ClientNetwork != "198.51.100.0/24" || got[0].Path != "/login" {
+	if len(got) != 1 || got[0].ClientAddress != "198.51.100.0/24" || got[0].Path != "/login" {
 		t.Fatalf("unexpected events: %#v", got)
 	}
 }

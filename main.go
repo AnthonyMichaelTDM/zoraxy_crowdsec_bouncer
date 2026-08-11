@@ -141,7 +141,7 @@ func main() {
 	// errGroup and context for plugin goroutines
 	g, ctx := errgroup.WithContext(context.Background())
 	decisionCache := decisions.NewCache()
-	blockedEvents := events.NewBlockedEvents(events.DefaultCapacity)
+	blockedEvents := events.NewBlockedEvents(events.DefaultCapacity, pluginConfig.BlockedEventsIPMode)
 
 	// initialize metrics and register custom and CrowdSec metrics
 	metricsHandler := metrics.NewMetricsHandler(logger)

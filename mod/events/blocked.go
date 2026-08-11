@@ -11,14 +11,18 @@ import (
 	"github.com/crowdsecurity/crowdsec/pkg/models"
 )
 
-const DefaultCapacity = 200
+const (
+	DefaultCapacity = 200
+	IPModeMasked    = "masked"
+	IPModeFull      = "full"
+)
 
-// BlockedEvent deliberately excludes headers, request bodies, query strings,
-// and the full client address. Those can contain credentials or other secrets.
+// BlockedEvent deliberately excludes headers, request bodies, and query strings,
+// which can contain credentials or other secrets.
 type BlockedEvent struct {
 	Timestamp     time.Time `json:"timestamp"`
 	Hostname      string    `json:"hostname"`
-	ClientNetwork string    `json:"clientNetwork"`
+	ClientAddress string    `json:"clientAddress"`
 	Method        string    `json:"method"`
 	Path          string    `json:"path"`
 	Origin        string    `json:"origin"`
@@ -32,14 +36,18 @@ type BlockedEvent struct {
 type BlockedEvents struct {
 	mu       sync.RWMutex
 	capacity int
+	ipMode   string
 	events   []BlockedEvent
 }
 
-func NewBlockedEvents(capacity int) *BlockedEvents {
+func NewBlockedEvents(capacity int, ipMode string) *BlockedEvents {
 	if capacity <= 0 {
 		capacity = DefaultCapacity
 	}
-	return &BlockedEvents{capacity: capacity, events: make([]BlockedEvent, 0, capacity)}
+	if ipMode != IPModeFull {
+		ipMode = IPModeMasked
+	}
+	return &BlockedEvents{capacity: capacity, ipMode: ipMode, events: make([]BlockedEvent, 0, capacity)}
 }
 
 func (b *BlockedEvents) Record(request *zoraxy_plugin.DynamicSniffForwardRequest, clientIP string, decision *models.Decision) {
@@ -50,7 +58,7 @@ func (b *BlockedEvents) Record(request *zoraxy_plugin.DynamicSniffForwardRequest
 	event := BlockedEvent{
 		Timestamp:     time.Now().UTC(),
 		Hostname:      request.Hostname,
-		ClientNetwork: anonymizeIP(clientIP),
+		ClientAddress: formatClientIP(clientIP, b.ipMode),
 		Method:        request.Method,
 		Path:          safePath(request.RequestURI),
 		Origin:        dereference(decision.Origin),
@@ -85,10 +93,13 @@ func dereference(value *string) string {
 	return *value
 }
 
-func anonymizeIP(value string) string {
+func formatClientIP(value, mode string) string {
 	address, err := netip.ParseAddr(value)
 	if err != nil {
 		return "unknown"
+	}
+	if mode == IPModeFull {
+		return address.String()
 	}
 	if address.Is4() {
 		return netip.PrefixFrom(address, 24).Masked().String()

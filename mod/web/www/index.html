@@ -48,7 +48,7 @@
 
 	<div class="ui basic segment">
 		<h2>Recent Blocked Connections</h2>
-		<p class="event-note">The latest 200 blocked requests from this plugin session. Client addresses are masked; headers, query strings, and bodies are never stored.</p>
+		<p class="event-note">The latest 200 blocked requests from this plugin session. Headers, query strings, and bodies are never stored. Client-address display follows <code>blocked_events_ip_mode</code>.</p>
 		<div id="blocked-events-container">Loading...</div>
 	</div>
 
@@ -223,14 +223,14 @@
 					const rows = data.map(event => `<tr>
 						<td>${escapeHtml(new Date(event.timestamp).toLocaleString())}</td>
 						<td>${escapeHtml(event.hostname)}</td>
-						<td>${escapeHtml(event.clientNetwork)}</td>
+						<td>${escapeHtml(event.clientAddress)}</td>
 						<td>${escapeHtml(event.method)} ${escapeHtml(event.path)}</td>
 						<td>${escapeHtml(event.decisionType)}</td>
 						<td>${escapeHtml(event.origin)}</td>
 						<td>${escapeHtml(event.scenario)}</td>
 					</tr>`).join('');
 					container.innerHTML = `<div class="events-table-wrapper"><table class="ui compact celled table events-table">
-						<thead><tr><th>Time</th><th>Hostname</th><th>Client network</th><th>Request</th><th>Action</th><th>Origin</th><th>Scenario</th></tr></thead>
+						<thead><tr><th>Time</th><th>Hostname</th><th>Client address</th><th>Request</th><th>Action</th><th>Origin</th><th>Scenario</th></tr></thead>
 						<tbody>${rows}</tbody>
 					</table></div>`;
 			} catch (error) {
