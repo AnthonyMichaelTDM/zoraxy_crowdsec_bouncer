@@ -16,18 +16,34 @@ The bouncer uses CrowdSec's decision stream mode. It keeps active IP and CIDR ba
 
 ## Installation
 
-> [!warning] 
+> [!warning]
 > These instructions are assuming you have a similar setup to me, that is, are running zoraxy more-or-less bare metal (I'm using an LXC, but the idea is the same).
-> 
+>
 > They are known to be inaccurate if you run Zoraxy in a docker container, see the following
-> - https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-14613481
-> 
+>
+> - <https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-14613481>
+>
 > The gist seems to be that you need to:
-> - put your plugins in a dictory that you mount to `/opt/zoraxy/plugin/` instead of `/opt/zoraxy/plugins/`
+>
+> - put your plugins in a directory that you mount to `/opt/zoraxy/plugin/` instead of `/opt/zoraxy/plugins/`
 > - run crowdsec in another container on the **same virtual network** as Zoraxy (so they can talk to eachother), and make sure you mount your zoraxy logs to this container so crowdsec can monitor traffic
 
-
 <https://zoraxy.aroz.org/plugins/html/1.%20Introduction/3.%20Installing%20Plugin.html>
+
+### From the Official Plugin Store
+
+Install the plugin from the Zoraxy plugin store, then open it from the Plugins section in the Zoraxy UI.
+
+On first start, the plugin creates a `config.yaml` file if one does not already exist. If `api_key` is still unset, the plugin starts in onboarding mode so the UI remains available while blocking stays disabled.
+
+![Onboarding state in the Zoraxy Crowdsec Bouncer plugin UI](assets/WebUI-Onboarding.png)
+
+To finish onboarding:
+
+1. Open the generated `config.yaml` for the plugin.
+2. Set `api_key` to a valid CrowdSec bouncer key.
+3. Confirm `agent_url` points to your CrowdSec Local API.
+4. Restart the plugin from Zoraxy.
 
 ### From GitHub Releases
 
@@ -68,9 +84,10 @@ chmod +x zoraxycrowdsecbouncer
 ## Post installation
 
 After installing the plugin, and getting to the point where on the zoraxy dashboard you can see it and that it is healthy, you need to do one more thing to actually get it to work:
+
 - add the plugin to a tag, and also add every service you want protected to the same tag.
 
-You'll also need to do some setup with crowdsec, see https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-12566727
+You'll also need to do some setup with crowdsec, see <https://github.com/tobychui/zoraxy/discussions/338#discussioncomment-12566727>.
 
 ## Configuration
 
@@ -98,16 +115,132 @@ The web UI is available from the Zoraxy web interface in the "Plugins" section.
 
 In it, you can view some basic information about the bouncer, such as the number of requests processed and dropped by the bouncer for each hostname.
 
+### Onboarding Mode
+
+If `api_key` is not set yet, the plugin starts in onboarding mode. In this state,
+the UI remains available, but blocking stays disabled until the configuration is
+completed and the plugin is restarted.
+
+![Onboarding warning shown in the Crowdsec Bouncer plugin UI](assets/WebUI-Onboarding.png)
+
 Additionally, the web UI will periodically check for updates and will tell you when an update is available.
 
-![](assets/WebUI-Update-Available.png)
+![Update available banner in the Crowdsec Bouncer plugin UI](assets/WebUI-Update-Available.png)
 
 The web UI will match the theme of the Zoraxy web interface, if you have it in dark mode, the web UI will also be in dark mode.
 
 ### Dark Mode
 
-![](assets/WebUI-Dark.png)
+![Crowdsec Bouncer plugin UI in dark mode](assets/WebUI-Dark.png)
 
 ### Light Mode
 
-![](assets/WebUI-Light.png)
+![Crowdsec Bouncer plugin UI in light mode](assets/WebUI-Light.png)
+
+## Local E2E Testing with Docker Compose
+
+This repository includes a [docker-compose.yml](docker-compose.yml) for local end-to-end testing.
+
+The compose stack runs:
+
+- Zoraxy (`zoraxydocker/zoraxy`) with mounted plugin and config directories
+- CrowdSec Local API (`crowdsecurity/crowdsec`) for bouncer integration testing
+- A simple internal test upstream (`test_webserver`) for proxy route testing
+
+### Quick start (Make tasks)
+
+Use the new dependent Make targets to bootstrap local testing:
+
+```bash
+# Onboarding flow (api_key intentionally unset)
+make test-env-onboarding
+
+# Fully configured flow (auto-generates CrowdSec API key and writes config)
+make test-env-ready
+```
+
+Other helpers:
+
+```bash
+make test-env-logs
+make test-env-down
+```
+
+### 1. Build the plugin into the mounted plugin directory
+
+```bash
+mkdir -p build/plugins/zoraxycrowdsecbouncer
+go build -o build/plugins/zoraxycrowdsecbouncer/zoraxycrowdsecbouncer .
+chmod +x build/plugins/zoraxycrowdsecbouncer/zoraxycrowdsecbouncer
+```
+
+### 2. Start the stack
+
+```bash
+docker compose up -d
+```
+
+If Docker container picker fails in Zoraxy, set the socket path explicitly before starting compose:
+
+```bash
+export DOCKER_SOCKET_PATH="${XDG_RUNTIME_DIR}/docker.sock"
+docker compose up -d
+```
+
+Open Zoraxy at <http://localhost:8000>.
+The container HTTP listener is also exposed at <http://localhost:18080>.
+
+### 3. Create a CrowdSec bouncer API key
+
+```bash
+docker compose exec crowdsec cscli bouncers add zoraxy-crowdsec-bouncer
+```
+
+Copy the generated API key into your plugin config file at:
+
+```text
+build/plugins/zoraxycrowdsecbouncer/config.yaml
+```
+
+When running in compose, set:
+
+```yaml
+agent_url: http://crowdsec:8080
+```
+
+### 4. Enable and wire the plugin in Zoraxy
+
+1. Enable the plugin from the Plugins page.
+2. Add the plugin to a tag.
+3. Add one or more proxy rules to the same tag.
+
+For quick local traffic testing, create a proxy route in Zoraxy that forwards to `http://test_webserver:5678`.
+
+### 5. Test first-start and onboarding behavior
+
+By default, the plugin creates `config.yaml` on first start if it does not exist and exits.
+
+- If `api_key` is still unset, the plugin enters onboarding mode.
+- In onboarding mode, the UI/API still works but blocking is disabled.
+- The UI will show an onboarding warning.
+
+You can verify onboarding mode in logs:
+
+```bash
+docker compose logs zoraxy | grep -i onboarding
+```
+
+### 6. Iterate on code changes
+
+After making local code changes:
+
+```bash
+go build -o build/plugins/zoraxycrowdsecbouncer/zoraxycrowdsecbouncer .
+docker compose restart zoraxy
+```
+
+### 7. Tear down
+
+```bash
+docker compose down
+```
