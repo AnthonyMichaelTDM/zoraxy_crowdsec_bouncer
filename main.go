@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/decisions"
@@ -20,6 +21,60 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
+
+func start_bouncer(g *errgroup.Group, ctx context.Context, pluginConfig *config.PluginConfig, logger *logrus.Logger, decisionCache *decisions.Cache, metricsHandler *metrics.MetricsHandler) {
+
+	// Initialize the CrowdSec stream bouncer. It keeps the decision cache local
+	// and only requests deltas from LAPI at the configured interval.
+	bouncer := &csbouncer.StreamBouncer{
+		APIKey:              pluginConfig.APIKey,
+		APIUrl:              pluginConfig.AgentUrl,
+		UserAgent:           info.BOUNCER_USER_AGENT,
+		TickerInterval:      pluginConfig.StreamUpdateFrequency,
+		Scopes:              []string{"ip", "range"},
+		RetryInitialConnect: true,
+	}
+	if err := bouncer.Init(); err != nil {
+		logger.Fatalf("unable to initialize bouncer: %v", err)
+	}
+
+	g.Go(func() error {
+		if err := bouncer.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case update, ok := <-bouncer.Stream:
+				if !ok {
+					return nil
+				}
+				decisionCache.Apply(update)
+			}
+		}
+	})
+
+	// initialize and start a metrics provider
+	metricsProvider, err := csbouncer.NewMetricsProvider(
+		bouncer.APIClient,
+		info.BOUNCER_TYPE,
+		metricsHandler.MetricsUpdater,
+		logger,
+	)
+	if err != nil {
+		logger.Fatalf("unable to initialize metrics provider: %v", err)
+		panic(err)
+	}
+
+	g.Go(func() error {
+		return metricsProvider.Run(ctx)
+	})
+}
 
 func main() {
 	// Serve the plugin introspect
@@ -62,69 +117,38 @@ func main() {
 	logger := logrus.StandardLogger()
 	logger.Level = pluginConfig.LogLevel
 
-	// Initialize the CrowdSec stream bouncer. It keeps the decision cache local
-	// and only requests deltas from LAPI at the configured interval.
-	bouncer := &csbouncer.StreamBouncer{
-		APIKey:              pluginConfig.APIKey,
-		APIUrl:              pluginConfig.AgentUrl,
-		UserAgent:           info.BOUNCER_USER_AGENT,
-		TickerInterval:      pluginConfig.StreamUpdateFrequency,
-		Scopes:              []string{"ip", "range"},
-		RetryInitialConnect: true,
+	missingFields := pluginConfig.MissingRequiredFields()
+	onboardingMode := len(missingFields) > 0
+	configStatus := web.ConfigStatusResponse{
+		Onboarding:      onboardingMode,
+		BlockingEnabled: !onboardingMode,
 	}
-	if err := bouncer.Init(); err != nil {
-		logger.Fatalf("unable to initialize bouncer: %v", err)
+	if onboardingMode {
+		configStatus.MissingFields = missingFields
+		configStatus.Message = fmt.Sprintf(
+			"Bouncer onboarding mode: update %s in %s, then restart the plugin.",
+			strings.Join(missingFields, ", "),
+			info.CONFIGURATION_FILE,
+		)
+		logger.Warn(configStatus.Message)
 	}
 
 	// initialize the path router
 	pathRouter := plugin.NewPathRouter()
 	pathRouter.SetDebugPrintMode(pluginConfig.LogLevel >= logrus.DebugLevel)
 
-	// errGroup and context for the metrics provider and bouncer
+	// errGroup and context for plugin goroutines
 	g, ctx := errgroup.WithContext(context.Background())
 	decisionCache := decisions.NewCache()
 
-	g.Go(func() error {
-		if err := bouncer.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			return err
-		}
-		return nil
-	})
-
-	g.Go(func() error {
-		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case update, ok := <-bouncer.Stream:
-				if !ok {
-					return nil
-				}
-				decisionCache.Apply(update)
-			}
-		}
-	})
-
-	// initialize and start a metrics provider
+	// initialize metrics and register custom and CrowdSec metrics
 	metricsHandler := metrics.NewMetricsHandler(logger)
-	metricsProvider, err := csbouncer.NewMetricsProvider(
-		bouncer.APIClient,
-		info.BOUNCER_TYPE,
-		metricsHandler.MetricsUpdater,
-		logger,
-	)
-	if err != nil {
-		logger.Fatalf("unable to initialize metrics provider: %v", err)
-		panic(err)
-	}
-
-	g.Go(func() error {
-		return metricsProvider.Run(ctx)
-	})
-
 	metrics.Map.MustRegisterAll()
-
 	prometheus.MustRegister(csbouncer.TotalLAPICalls, csbouncer.TotalLAPIError)
+
+	if !onboardingMode {
+		start_bouncer(g, ctx, pluginConfig, logger, decisionCache, metricsHandler)
+	}
 
 	/*
 		Dynamic Captures
@@ -141,7 +165,7 @@ func main() {
 		dynamiccapture.CaptureHandler(logger, w, r)
 	})
 
-	web.InitWebServer(logger, g, ctx, runtimeCfg.Port)
+	web.InitWebServer(logger, g, ctx, runtimeCfg.Port, configStatus)
 
 	// Handle signals
 	utils.StartSignalHandler(logger, g, ctx)

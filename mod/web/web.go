@@ -40,6 +40,18 @@ type HeadersResponse struct {
 	Headers map[string][]string `json:"headers"`
 }
 
+type ConfigStatusResponse struct {
+	Onboarding      bool     `json:"onboarding"`
+	BlockingEnabled bool     `json:"blockingEnabled"`
+	Message         string   `json:"message,omitempty"`
+	MissingFields   []string `json:"missingFields,omitempty"`
+}
+
+var runtimeConfigStatus = ConfigStatusResponse{
+	Onboarding:      false,
+	BlockingEnabled: true,
+}
+
 // API handlers
 func apiVersionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -145,6 +157,11 @@ func apiHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func apiConfigStatusHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(runtimeConfigStatus)
+}
+
 // Version checking with caching
 var (
 	versionCheckOnce   sync.Once
@@ -237,7 +254,9 @@ func versionCheck() (string, error) {
 // Also sets up a shutdown handler for graceful shutdown.
 //
 // Runs everything on the default serve mux.
-func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, port int) {
+func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, port int, configStatus ConfigStatusResponse) {
+	runtimeConfigStatus = configStatus
+
 	mux := http.DefaultServeMux
 
 	// webui and API
@@ -248,6 +267,7 @@ func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context
 	mux.HandleFunc(info.UI_PATH+"api/version", apiVersionHandler)
 	mux.HandleFunc(info.UI_PATH+"api/metrics", apiMetricsHandler)
 	mux.HandleFunc(info.UI_PATH+"api/headers", apiHeadersHandler)
+	mux.HandleFunc(info.UI_PATH+"api/config-status", apiConfigStatusHandler)
 
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
 	server := &http.Server{
@@ -256,7 +276,7 @@ func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context
 	}
 
 	g.Go(func() error {
-		fmt.Printf("Zoraxy Crowdsec Bouncer started at %s%s\n", serverAddr, info.UI_PATH)
+		fmt.Printf("Zoraxy Crowdsec Bouncer started at http://%s%s\n", serverAddr, info.UI_PATH)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			return fmt.Errorf("web server failed: %w", err)
 		}

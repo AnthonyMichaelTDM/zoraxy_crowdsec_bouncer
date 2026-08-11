@@ -18,6 +18,8 @@
 <div class="ui container">
 	<div class="ui basic segment">
 		<h1>Zoraxy Crowdsec Bouncer Debug UI</h1>
+
+		<div id="config-status-container"></div>
 		
 		<h2>Plugin Information</h2>
 		<p>Version: <span id="version-info">Loading...</span></p>
@@ -178,6 +180,43 @@
 				}
 			});
         }
+
+		async function fetchConfigStatus() {
+			const statusContainer = document.getElementById('config-status-container');
+
+			$.ajax({
+				url: './api/config-status',
+				method: 'GET',
+				dataType: 'json',
+				success: function(data) {
+					if (!data.onboarding) {
+						statusContainer.innerHTML = '';
+						return;
+					}
+
+					const missingFields = Array.isArray(data.missingFields) && data.missingFields.length > 0
+						? data.missingFields.map(escapeHtml).join(', ')
+						: 'none';
+
+					statusContainer.innerHTML = `
+						<div class="ui warning message">
+							<div class="header">Onboarding Required</div>
+							<p>${escapeHtml(data.message || 'Configure the plugin to enable blocking.')}</p>
+							<p><strong>Missing fields:</strong> ${missingFields}</p>
+							<p>Blocking is currently disabled until configuration is completed and the plugin is restarted.</p>
+						</div>
+					`;
+				},
+				error: function(xhr) {
+					statusContainer.innerHTML = `
+						<div class="ui message error">
+							<div class="header">Unable to load configuration status</div>
+							<p>${wrapError(`Failed to fetch config status: ${xhr.status} ${xhr.statusText}`)}</p>
+						</div>
+					`;
+				}
+			});
+		}
         
         async function fetchHeaders() {
 			headersDisplay = document.getElementById('headers-display');
@@ -241,6 +280,7 @@
         async function loadAll() {
             await Promise.all([
                 fetchVersion(),
+				fetchConfigStatus(),
                 fetchMetrics(),
                 fetchHeaders()
             ]);
