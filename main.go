@@ -50,6 +50,10 @@ func main() {
 	// load the configuration
 	pluginConfig := &config.PluginConfig{}
 	if err := pluginConfig.LoadConfig(); err != nil {
+		if errors.Is(err, config.ErrConfigCreated) {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
 		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		panic(err)
 	}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,19 @@ import (
 )
 
 const DefaultStreamUpdateFrequency = "10s"
+
+var ErrConfigCreated = errors.New("config file created")
+
+const defaultConfigTemplate = `# Crowdsec Bouncer Configuration
+api_key: <CROWDSEC_BOUNCER_API_KEY>
+agent_url: http://127.0.0.1:8080
+# How frequently to request decision deltas from CrowdSec's stream endpoint.
+stream_update_frequency: 10s
+# Log level for the bouncer, options: trace, debug, info, warning, error
+log_level: warning
+# Set to true if zoraxy is proxied behind Cloudflare
+is_proxied_behind_cloudflare: true
+`
 
 type PluginConfig struct {
 	APIKey                    string `yaml:"api_key"`
@@ -40,6 +54,12 @@ func (p *PluginConfig) PostProcess() error {
 func (p *PluginConfig) LoadConfig() error {
 	configFile, err := os.Open(info.CONFIGURATION_FILE)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if writeErr := os.WriteFile(info.CONFIGURATION_FILE, []byte(defaultConfigTemplate), 0o644); writeErr != nil {
+				return fmt.Errorf("unable to create default config file: %w", writeErr)
+			}
+			return fmt.Errorf("%w: %s (please edit api_key and agent_url, then restart)", ErrConfigCreated, info.CONFIGURATION_FILE)
+		}
 		return fmt.Errorf("unable to open config file: %w", err)
 	}
 	defer configFile.Close()
