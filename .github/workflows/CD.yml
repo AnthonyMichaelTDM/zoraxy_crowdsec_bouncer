@@ -81,7 +81,6 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: build
-    if: startsWith(github.ref, 'refs/tags/')
     steps:
     - uses: actions/checkout@v4
 
@@ -92,7 +91,18 @@ jobs:
 
     - name: Flatten artifact directories
       run: |
-        find dist -mindepth 2 -type f -exec mv {} dist/ \;
+        find dist -mindepth 2 -type f | while read -r file; do
+          basename=$(basename "$file")
+          tmpfile=$(mktemp -p dist tmp.XXXXXX)
+          mv "$file" "$tmpfile"
+          mv "$tmpfile" "dist/$basename"
+        done
+        find dist -mindepth 1 -type d -empty -delete
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'go.mod'
 
     - name: Generate config checksum
       run: sha256sum config.yaml > config.yaml.sha256
@@ -101,7 +111,8 @@ jobs:
       id: release_body
       run: |
         echo "# Release notes for ${{ github.ref_name }}" > release_notes.txt
-        echo "Build date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> release_notes.txt
+        echo "Build date: $(date)" >> release_notes.txt
+        echo "Go version: $(go version)" >> release_notes.txt
         echo "Commit SHA: ${{ github.sha }}" >> release_notes.txt
         echo "" >> release_notes.txt
         echo "| File | SHA256 Checksum |" >> release_notes.txt
@@ -110,7 +121,7 @@ jobs:
           checksum="$(awk '{print $1}' "$checksum_file")"
           binary_name="$(basename "$checksum_file" .sha256)"
           echo "| ${binary_name} | \`${checksum}\` |" >> release_notes.txt
-        done < <(find dist -maxdepth 1 -type f -name '*.sha256' | sort)
+        done < <(find dist -type f -name '*.sha256' | sort)
         echo "| config.yaml | \`$(awk '{print $1}' config.yaml.sha256)\` |" >> release_notes.txt
         echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
         cat release_notes.txt >> "$GITHUB_OUTPUT"
@@ -118,6 +129,7 @@ jobs:
 
     - name: Create Release
       id: create_release
+      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name }}
