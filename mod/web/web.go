@@ -13,6 +13,7 @@ import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -142,6 +143,17 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// prometheusMetricsHandler exposes the registered bouncer metrics in the
+// Prometheus text exposition format. The plugin server listens on loopback, so
+// any route exposing this handler outside the host must be access-controlled.
+func prometheusMetricsHandler() http.Handler {
+	return prometheusMetricsHandlerFor(prometheus.DefaultGatherer)
+}
+
+func prometheusMetricsHandlerFor(gatherer prometheus.Gatherer) http.Handler {
+	return promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+}
+
 func apiHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
@@ -266,6 +278,7 @@ func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context
 	// Add API endpoints
 	mux.HandleFunc(info.UI_PATH+"api/version", apiVersionHandler)
 	mux.HandleFunc(info.UI_PATH+"api/metrics", apiMetricsHandler)
+	mux.Handle(info.UI_PATH+"metrics", prometheusMetricsHandler())
 	mux.HandleFunc(info.UI_PATH+"api/headers", apiHeadersHandler)
 	mux.HandleFunc(info.UI_PATH+"api/config-status", apiConfigStatusHandler)
 

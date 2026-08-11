@@ -131,6 +131,12 @@ The web UI is available from the Zoraxy web interface in the "Plugins" section.
 
 In it, you can view some basic information about the bouncer, such as the number of requests processed and dropped by the bouncer for each hostname.
 
+## Prometheus
+
+The plugin exposes its Prometheus metrics at `/metrics` in the standard Prometheus text format. This includes `zoraxy_bouncer_blocked_requests` and `zoraxy_bouncer_processed_requests`, labelled by hostname (and decision origin for blocked requests).
+
+The plugin server listens on loopback. If you make this endpoint reachable through Zoraxy or another proxy for Prometheus, keep it on a trusted network and apply access controls; metrics may reveal service names and traffic volumes.
+
 ### Onboarding Mode
 
 If `api_key` is not set yet, the plugin starts in onboarding mode. In this state,
