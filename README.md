@@ -169,7 +169,7 @@ make test-env-down
 Both `make test-env-onboarding` and `make test-env-ready` also pre-generate the
 local Zoraxy config needed for this test stack:
 
-- a proxy rule for `crowdsec-bouncer-test-webserver` -> `test_webserver:5678`
+- a proxy rule for `localhost` -> `test_webserver:5678`
 - a `protected` plugin group containing `com.anthonyrubick.zoraxycrowdsecbouncer`
 
 ### 1. Build the plugin into the mounted plugin directory
@@ -195,6 +195,7 @@ docker compose up -d
 
 Open Zoraxy at <http://localhost:8000>.
 The container HTTP listener is also exposed at <http://localhost:18080>.
+For browser testing through Zoraxy, open <https://localhost:8443>.
 
 ### 3. Create a CrowdSec bouncer API key
 
@@ -222,7 +223,7 @@ In Zoraxy, verify that:
 
 1. the plugin is enabled from the Plugins page.
 2. the `protected` plugin group contains the CrowdSec bouncer plugin.
-3. the `crowdsec-bouncer-test-webserver` host rule exists and is tagged with `protected`.
+3. the `localhost` host rule exists and is tagged with `protected`.
 
 ### 5. Test first-start and onboarding behavior
 
