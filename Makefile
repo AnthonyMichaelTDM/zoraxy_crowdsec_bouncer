@@ -129,3 +129,8 @@ test-env-zoraxy-plugin-groups: test-env-dirs
 
 test-env-zoraxy-config: test-env-zoraxy-proxy-rule test-env-zoraxy-plugin-groups 
 
+.PHONY: install-hooks
+install-hooks:
+	command -v pre-commit >/dev/null 2>&1 || { echo "pre-commit is not installed. Install it with 'pip install pre-commit' or your package manager."; exit 1; }
+	pre-commit install
+
