@@ -2,7 +2,7 @@
 
 ## v1.2.3
 
-- Add pre-commit hooks by @AnthonyMichaelTDM in #39.
+- Add pre-commit hooks and .introspect validation by @AnthonyMichaelTDM in #39.
 - Updated local test environment documentation by @AnthonyMichaelTDM in #38.
 - Add requisite files for adding the plugin to the Zoraxy plugin store by @AnthonyMichaelTDM in #38.
 - Compile the plugin for all supported platforms and architectures in the release workflow, and upload the binaries as release artifacts by @AnthonyMichaelTDM in #38.
