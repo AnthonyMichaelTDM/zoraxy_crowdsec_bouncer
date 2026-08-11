@@ -115,11 +115,7 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 
 			value := metric.GetCounter().GetValue()
 
-			if metricName == string(metrics.DROPPED_REQUESTS) {
-				response.BlockedRequests[hostname] = value
-			} else if metricName == string(metrics.PROCESSED_REQUESTS) {
-				response.ProcessedRequests[hostname] = value
-			}
+			addMetricValue(&response, metricName, hostname, value)
 		}
 	}
 
@@ -141,6 +137,17 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// addMetricValue aggregates the same hostname across all labels. Blocked
+// request counters also carry an origin label, so assigning instead of adding
+// would silently discard one of the origins.
+func addMetricValue(response *MetricsResponse, metricName, hostname string, value float64) {
+	if metricName == string(metrics.DROPPED_REQUESTS) {
+		response.BlockedRequests[hostname] += value
+	} else if metricName == string(metrics.PROCESSED_REQUESTS) {
+		response.ProcessedRequests[hostname] += value
+	}
 }
 
 // prometheusMetricsHandler exposes the registered bouncer metrics in the
