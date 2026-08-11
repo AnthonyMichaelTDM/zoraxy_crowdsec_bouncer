@@ -36,7 +36,10 @@ func main() {
 	g, ctx := errgroup.WithContext(context.Background())
 
 	// Initialize the web UI
-	web.InitWebServer(logger, g, ctx, 3000)
+	web.InitWebServer(logger, g, ctx, PORT, web.ConfigStatusResponse{
+		Onboarding:      false,
+		BlockingEnabled: true,
+	})
 
 	// Handle signals
 	utils.StartSignalHandler(logrus.StandardLogger(), g, ctx)

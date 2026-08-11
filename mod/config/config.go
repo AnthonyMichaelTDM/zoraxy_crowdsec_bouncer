@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/sirupsen/logrus"
@@ -12,11 +13,12 @@ import (
 )
 
 const DefaultStreamUpdateFrequency = "10s"
+const PlaceholderAPIKey = "<CROWDSEC_BOUNCER_API_KEY>"
 
 var ErrConfigCreated = errors.New("config file created")
 
 const defaultConfigTemplate = `# Crowdsec Bouncer Configuration
-api_key: <CROWDSEC_BOUNCER_API_KEY>
+# api_key: "YOUR_CROWDSEC_BOUNCER_API_KEY"
 agent_url: http://127.0.0.1:8080
 # How frequently to request decision deltas from CrowdSec's stream endpoint.
 stream_update_frequency: 10s
@@ -36,15 +38,35 @@ type PluginConfig struct {
 	LogLevel logrus.Level `yaml:"-"`
 }
 
+func (p *PluginConfig) MissingRequiredFields() []string {
+	missing := make([]string, 0, 2)
+
+	trimmedAPIKey := strings.TrimSpace(p.APIKey)
+	if trimmedAPIKey == "" || trimmedAPIKey == PlaceholderAPIKey {
+		missing = append(missing, "api_key")
+	}
+
+	if strings.TrimSpace(p.AgentUrl) == "" {
+		missing = append(missing, "agent_url")
+	}
+
+	return missing
+}
+
 func (p *PluginConfig) PostProcess() error {
 	// This function can be used to perform any post-processing on the configuration
 	// For now, it populates the LogLevel based on the LogLevelString
 	// parse the log level string into a logrus Level
+	if p.LogLevelString == "" {
+		p.LogLevelString = "warning"
+	}
+
 	level, err := logrus.ParseLevel(p.LogLevelString)
 	if err != nil {
 		return fmt.Errorf("unable to parse log level: %w", err)
 	}
 	p.LogLevel = level
+
 	if p.StreamUpdateFrequency == "" {
 		p.StreamUpdateFrequency = DefaultStreamUpdateFrequency
 	}

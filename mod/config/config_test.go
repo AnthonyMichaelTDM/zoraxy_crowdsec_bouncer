@@ -46,3 +46,51 @@ func TestLoadConfigCreatesDefaultOnMissingFile(t *testing.T) {
 		t.Fatal("config.yaml should not be empty")
 	}
 }
+
+func TestMissingRequiredFields(t *testing.T) {
+	tests := []struct {
+		name       string
+		cfg        PluginConfig
+		wantFields []string
+	}{
+		{
+			name: "missing both api key and agent url",
+			cfg: PluginConfig{
+				APIKey:   "",
+				AgentUrl: "",
+			},
+			wantFields: []string{"api_key", "agent_url"},
+		},
+		{
+			name: "placeholder api key",
+			cfg: PluginConfig{
+				APIKey:   PlaceholderAPIKey,
+				AgentUrl: "http://127.0.0.1:8080",
+			},
+			wantFields: []string{"api_key"},
+		},
+		{
+			name: "all required fields present",
+			cfg: PluginConfig{
+				APIKey:   "real-key",
+				AgentUrl: "http://127.0.0.1:8080",
+			},
+			wantFields: []string{},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tc.cfg.MissingRequiredFields()
+			if len(got) != len(tc.wantFields) {
+				t.Fatalf("MissingRequiredFields() = %v, want %v", got, tc.wantFields)
+			}
+
+			for i := range got {
+				if got[i] != tc.wantFields[i] {
+					t.Fatalf("MissingRequiredFields() = %v, want %v", got, tc.wantFields)
+				}
+			}
+		})
+	}
+}
