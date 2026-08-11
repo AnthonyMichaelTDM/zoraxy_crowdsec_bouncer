@@ -21,8 +21,10 @@ jq -S . .introspect > "$tmpdir/expected.json"
 
 if ! go run . -introspect > "$tmpdir/actual_raw.json" 2> "$tmpdir/actual.stderr"; then
   echo "ERROR: failed to generate introspection output."
-  echo "stdout/stderr from go run . -introspect:"
-  cat "$tmpdir/actual.stderr"
+  echo "stdout from go run . -introspect:"
+  cat "$tmpdir/actual_raw.json" || true
+  echo "stderr from go run . -introspect:"
+  cat "$tmpdir/actual.stderr" || true
   exit 1
 fi
 
