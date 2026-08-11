@@ -14,12 +14,11 @@ func TestPrometheusMetricsHandlerExposesTextFormat(t *testing.T) {
 	metrics.Map.MustRegisterAll()
 	t.Cleanup(func() {
 		for _, metric := range metrics.Map {
-			metric.Gauge.Reset()
-			prometheus.Unregister(metric.Gauge)
+			prometheus.Unregister(metric.Counter)
 		}
 	})
-	metrics.Map[metrics.DROPPED_REQUESTS].Gauge.With(prometheus.Labels{"origin": "crowdsec", "hostname": "service.example"}).Set(3)
-	metrics.Map[metrics.PROCESSED_REQUESTS].Gauge.With(prometheus.Labels{"hostname": "service.example"}).Set(10)
+	metrics.Map[metrics.DROPPED_REQUESTS].Counter.With(prometheus.Labels{"origin": "crowdsec", "hostname": "service.example"}).Add(3)
+	metrics.Map[metrics.PROCESSED_REQUESTS].Counter.With(prometheus.Labels{"hostname": "service.example"}).Add(10)
 
 	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	response := httptest.NewRecorder()

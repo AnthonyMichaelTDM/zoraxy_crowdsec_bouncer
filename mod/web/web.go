@@ -113,7 +113,7 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			value := metric.GetGauge().GetValue()
+			value := metric.GetCounter().GetValue()
 
 			if metricName == string(metrics.DROPPED_REQUESTS) {
 				response.BlockedRequests[hostname] = value
