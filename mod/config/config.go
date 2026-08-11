@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v2"
 )
@@ -26,17 +27,20 @@ stream_update_frequency: 10s
 log_level: warning
 # Set to true if zoraxy is proxied behind Cloudflare
 is_proxied_behind_cloudflare: true
+# Persisted rolling 24-hour block aggregation (contains only timestamp, hostname and origin)
+blocked_requests_aggregation_file: blocked-requests-24h.json
 # Optional dedicated Prometheus listener, e.g. :2112. Leave empty to disable.
 prometheus_listen_addr: ""
 `
 
 type PluginConfig struct {
-	APIKey                    string `yaml:"api_key"`
-	AgentUrl                  string `yaml:"agent_url"`
-	StreamUpdateFrequency     string `yaml:"stream_update_frequency"`
-	LogLevelString            string `yaml:"log_level"`
-	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
-	PrometheusListenAddr      string `yaml:"prometheus_listen_addr"`
+	APIKey                         string `yaml:"api_key"`
+	AgentUrl                       string `yaml:"agent_url"`
+	StreamUpdateFrequency          string `yaml:"stream_update_frequency"`
+	LogLevelString                 string `yaml:"log_level"`
+	IsProxiedBehindCloudflare      bool   `yaml:"is_proxied_behind_cloudflare"`
+	BlockedRequestsAggregationFile string `yaml:"blocked_requests_aggregation_file"`
+	PrometheusListenAddr           string `yaml:"prometheus_listen_addr"`
 
 	LogLevel logrus.Level `yaml:"-"`
 }
@@ -74,6 +78,10 @@ func (p *PluginConfig) PostProcess() error {
 		p.StreamUpdateFrequency = DefaultStreamUpdateFrequency
 	}
 	p.PrometheusListenAddr = strings.TrimSpace(p.PrometheusListenAddr)
+	p.BlockedRequestsAggregationFile = strings.TrimSpace(p.BlockedRequestsAggregationFile)
+	if p.BlockedRequestsAggregationFile == "" {
+		p.BlockedRequestsAggregationFile = metrics.DefaultBlockedRequestsAggregationFile
+	}
 	return nil
 }
 

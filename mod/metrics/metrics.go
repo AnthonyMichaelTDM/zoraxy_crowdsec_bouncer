@@ -20,9 +20,12 @@ type metricName string
 type MetricUnit string
 
 const (
-	DROPPED_REQUESTS   metricName = "zoraxy_bouncer_blocked_requests"
-	PROCESSED_REQUESTS metricName = "zoraxy_bouncer_processed_requests"
+	DROPPED_REQUESTS     metricName = "zoraxy_bouncer_blocked_requests"
+	PROCESSED_REQUESTS   metricName = "zoraxy_bouncer_processed_requests"
+	DROPPED_REQUESTS_24H metricName = "zoraxy_bouncer_blocked_requests_24h"
 )
+
+const DefaultBlockedRequestsAggregationFile = "blocked-requests-24h.json"
 
 type Metric struct {
 	Name         string
@@ -39,7 +42,13 @@ func (m metricMap) MustRegisterAll() {
 	for _, met := range m {
 		prometheus.MustRegister(met.Counter)
 	}
+	prometheus.MustRegister(blockedRequests24h)
 }
+
+var blockedRequests24h = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+	Name: string(DROPPED_REQUESTS_24H),
+	Help: "Exact rolling 24-hour count of requests blocked by the Zoraxy bouncer",
+}, []string{"origin", "hostname"})
 
 var Map = metricMap{
 	DROPPED_REQUESTS: {
@@ -81,16 +90,22 @@ func getLabelValue(labels []*io_prometheus_client.LabelPair, key string) string 
 }
 
 type MetricsHandler struct {
-	Lock   sync.RWMutex
-	logger *logrus.Logger
+	Lock                      sync.RWMutex
+	logger                    *logrus.Logger
+	blockedRequestsAggregator *BlockedRequestsAggregator
 }
 
-func NewMetricsHandler(logger *logrus.Logger) *MetricsHandler {
-	// Initialization logic for MetricsHandler if needed
-	mh := &MetricsHandler{
-		logger: logger,
-		Lock:   sync.RWMutex{},
+func NewMetricsHandler(logger *logrus.Logger, aggregationPath string) *MetricsHandler {
+	aggregator, err := NewBlockedRequestsAggregator(aggregationPath)
+	if err != nil {
+		logger.WithError(err).Warn("Unable to load persisted blocked request aggregation; starting with an empty in-memory aggregation")
 	}
+	mh := &MetricsHandler{
+		logger:                    logger,
+		Lock:                      sync.RWMutex{},
+		blockedRequestsAggregator: aggregator,
+	}
+	mh.refreshBlockedRequests24hMetric(aggregator.Snapshot())
 
 	return mh
 }
@@ -101,7 +116,24 @@ func (mh *MetricsHandler) MarkRequestDropped(hostname string, decision *models.D
 
 	// Increment the dropped requests metric
 	// This is a simple counter, so we just increment the value
-	Map[DROPPED_REQUESTS].Counter.With(prometheus.Labels{"origin": *decision.Origin, "hostname": hostname}).Inc()
+	origin := "unknown"
+	if decision.Origin != nil {
+		origin = *decision.Origin
+	}
+	Map[DROPPED_REQUESTS].Counter.With(prometheus.Labels{"origin": origin, "hostname": hostname}).Inc()
+
+	snapshot, err := mh.blockedRequestsAggregator.Record(hostname, origin)
+	if err != nil {
+		mh.logger.WithError(err).Warn("Unable to persist blocked request aggregation")
+	}
+	mh.refreshBlockedRequests24hMetric(snapshot)
+}
+
+func (mh *MetricsHandler) refreshBlockedRequests24hMetric(snapshot map[BlockedRequestKey]uint64) {
+	blockedRequests24h.Reset()
+	for key, count := range snapshot {
+		blockedRequests24h.With(prometheus.Labels{"origin": key.Origin, "hostname": key.Hostname}).Set(float64(count))
+	}
 }
 
 func (mh *MetricsHandler) MarkRequestProcessed(hostname string) {
@@ -120,6 +152,7 @@ func (mh *MetricsHandler) MetricsUpdater(met *models.RemediationComponentsMetric
 
 	mh.Lock.RLock()
 	defer mh.Lock.RUnlock()
+	mh.refreshBlockedRequests24hMetric(mh.blockedRequestsAggregator.Snapshot())
 
 	// Most of the common fields are set automatically by the metrics provider
 	// We only need to care about the metrics themselves

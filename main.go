@@ -142,7 +142,7 @@ func main() {
 	decisionCache := decisions.NewCache()
 
 	// initialize metrics and register custom and CrowdSec metrics
-	metricsHandler := metrics.NewMetricsHandler(logger)
+	metricsHandler := metrics.NewMetricsHandler(logger, pluginConfig.BlockedRequestsAggregationFile)
 	metrics.Map.MustRegisterAll()
 	prometheus.MustRegister(csbouncer.TotalLAPICalls, csbouncer.TotalLAPIError)
 
