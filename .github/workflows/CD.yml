@@ -99,13 +99,7 @@ jobs:
         echo "EOF" >> "$GITHUB_OUTPUT"
         echo "sha256_files<<EOF" >> "$GITHUB_OUTPUT"
         find dist -type f -name '*.sha256' | sort >> "$GITHUB_OUTPUT"
-        echo "config.yaml.sha256" >> "$GITHUB_OUTPUT"
         echo "EOF" >> "$GITHUB_OUTPUT"
-
-    - name: Setup Go
-      uses: actions/setup-go@v5
-      with:
-        go-version-file: 'go.mod'
 
     - name: Generate config checksum
       run: sha256sum config.yaml > config.yaml.sha256
@@ -115,7 +109,6 @@ jobs:
       run: |
         echo "# Release notes for ${{ github.ref_name }}" > release_notes.txt
         echo "Build date: $(date)" >> release_notes.txt
-        echo "Go version: $(go version)" >> release_notes.txt
         echo "Commit SHA: ${{ github.sha }}" >> release_notes.txt
         echo "" >> release_notes.txt
         echo "| File | SHA256 Checksum |" >> release_notes.txt
