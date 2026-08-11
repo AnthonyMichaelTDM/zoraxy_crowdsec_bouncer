@@ -16,6 +16,26 @@ func TestPostProcessDefaultsStreamUpdateFrequency(t *testing.T) {
 	if pluginConfig.StreamUpdateFrequency != DefaultStreamUpdateFrequency {
 		t.Fatalf("StreamUpdateFrequency = %q, want %q", pluginConfig.StreamUpdateFrequency, DefaultStreamUpdateFrequency)
 	}
+	if pluginConfig.BlockedEventsIPMode != DefaultBlockedEventsIPMode {
+		t.Fatalf("BlockedEventsIPMode = %q, want %q", pluginConfig.BlockedEventsIPMode, DefaultBlockedEventsIPMode)
+	}
+}
+
+func TestPostProcessAcceptsAndRejectsBlockedEventsIPModes(t *testing.T) {
+	for _, test := range []struct {
+		mode    string
+		wantErr bool
+	}{
+		{mode: "full"},
+		{mode: "MASKED"},
+		{mode: "invalid", wantErr: true},
+	} {
+		config := PluginConfig{LogLevelString: "warning", BlockedEventsIPMode: test.mode}
+		err := config.PostProcess()
+		if (err != nil) != test.wantErr {
+			t.Fatalf("PostProcess(%q) error = %v, wantErr %v", test.mode, err, test.wantErr)
+		}
+	}
 }
 
 func TestLoadConfigCreatesDefaultOnMissingFile(t *testing.T) {
