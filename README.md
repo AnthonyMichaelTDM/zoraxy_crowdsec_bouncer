@@ -81,6 +81,22 @@ go build
 chmod +x zoraxycrowdsecbouncer
 ```
 
+## Developer tooling
+
+This repo includes a `pre-commit` configuration for Go formatting, vetting, and validating the generated `.introspect` payload.
+
+Install the hook locally with:
+
+```bash
+make install-hooks
+```
+
+Run the checks manually with:
+
+```bash
+pre-commit run --all-files
+```
+
 ## Post installation
 
 After installing the plugin, and getting to the point where on the zoraxy dashboard you can see it and that it is healthy, you need to do one more thing to actually get it to work:

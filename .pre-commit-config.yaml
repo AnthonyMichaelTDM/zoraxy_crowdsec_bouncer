@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: gofmt -w
+        language: system
+        types: [go]
+      - id: govet
+        name: go vet
+        entry: go vet ./...
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: validate-introspect
+        name: validate .introspect
+        entry: bash .pre-commit-scripts/validate_introspect.sh
+        language: system
+        pass_filenames: false
+        always_run: true
