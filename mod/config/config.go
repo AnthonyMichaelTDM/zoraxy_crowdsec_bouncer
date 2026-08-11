@@ -26,6 +26,8 @@ stream_update_frequency: 10s
 log_level: warning
 # Set to true if zoraxy is proxied behind Cloudflare
 is_proxied_behind_cloudflare: true
+# Optional dedicated Prometheus listener, e.g. :2112. Leave empty to disable.
+prometheus_listen_addr: ""
 `
 
 type PluginConfig struct {
@@ -34,6 +36,7 @@ type PluginConfig struct {
 	StreamUpdateFrequency     string `yaml:"stream_update_frequency"`
 	LogLevelString            string `yaml:"log_level"`
 	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
+	PrometheusListenAddr      string `yaml:"prometheus_listen_addr"`
 
 	LogLevel logrus.Level `yaml:"-"`
 }
@@ -70,6 +73,7 @@ func (p *PluginConfig) PostProcess() error {
 	if p.StreamUpdateFrequency == "" {
 		p.StreamUpdateFrequency = DefaultStreamUpdateFrequency
 	}
+	p.PrometheusListenAddr = strings.TrimSpace(p.PrometheusListenAddr)
 	return nil
 }
 

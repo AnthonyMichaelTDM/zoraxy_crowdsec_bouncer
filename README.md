@@ -117,6 +117,8 @@ agent_url: http://127.0.0.1:8080 # for example
 stream_update_frequency: 10s # How often to retrieve decision deltas from CrowdSec
 log_level: warning # Log level for the bouncer, options: trace, debug, info, warning, error
 is_proxied_behind_cloudflare: true # Set to true if your zoraxy instance is proxied behind Cloudflare
+# Optional dedicated listener for Prometheus, e.g. :2112
+prometheus_listen_addr: ""
 ```
 
 You can get the API key by running the following command:
@@ -135,7 +137,7 @@ In it, you can view some basic information about the bouncer, such as the number
 
 The plugin exposes its Prometheus metrics at `/metrics` in the standard Prometheus text format. This includes `zoraxy_bouncer_blocked_requests` and `zoraxy_bouncer_processed_requests`, labelled by hostname (and decision origin for blocked requests).
 
-The plugin server listens on loopback. If you make this endpoint reachable through Zoraxy or another proxy for Prometheus, keep it on a trusted network and apply access controls; metrics may reveal service names and traffic volumes.
+Set `prometheus_listen_addr` (for example, `:2112`) to also start a dedicated scrape listener. It is disabled by default. Bind or publish this port only on a trusted network and apply access controls; metrics may reveal service names and traffic volumes.
 
 ### Onboarding Mode
 

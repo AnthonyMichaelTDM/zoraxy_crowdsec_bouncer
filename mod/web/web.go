@@ -154,6 +154,31 @@ func prometheusMetricsHandlerFor(gatherer prometheus.Gatherer) http.Handler {
 	return promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
 }
 
+// StartPrometheusServer starts an optional dedicated listener for Prometheus.
+// Callers should bind it only to a trusted network interface.
+func StartPrometheusServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, listenAddr string) {
+	if listenAddr == "" {
+		return
+	}
+
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: prometheusMetricsHandler(),
+	}
+
+	g.Go(func() error {
+		logger.Infof("Prometheus metrics available at http://%s/metrics", listenAddr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("Prometheus metrics server failed: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		return ShutdownWebServer(server, 30*time.Second)
+	})
+}
+
 func apiHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 

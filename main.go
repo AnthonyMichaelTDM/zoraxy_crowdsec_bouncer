@@ -166,6 +166,7 @@ func main() {
 	})
 
 	web.InitWebServer(logger, g, ctx, runtimeCfg.Port, configStatus)
+	web.StartPrometheusServer(logger, g, ctx, pluginConfig.PrometheusListenAddr)
 
 	// Handle signals
 	utils.StartSignalHandler(logger, g, ctx)

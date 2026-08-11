@@ -16,6 +16,19 @@ func TestPostProcessDefaultsStreamUpdateFrequency(t *testing.T) {
 	if pluginConfig.StreamUpdateFrequency != DefaultStreamUpdateFrequency {
 		t.Fatalf("StreamUpdateFrequency = %q, want %q", pluginConfig.StreamUpdateFrequency, DefaultStreamUpdateFrequency)
 	}
+	if pluginConfig.PrometheusListenAddr != "" {
+		t.Fatalf("PrometheusListenAddr = %q, want empty default", pluginConfig.PrometheusListenAddr)
+	}
+}
+
+func TestPostProcessTrimsPrometheusListenAddress(t *testing.T) {
+	pluginConfig := PluginConfig{LogLevelString: "warning", PrometheusListenAddr: " :2112 "}
+	if err := pluginConfig.PostProcess(); err != nil {
+		t.Fatalf("PostProcess() error = %v", err)
+	}
+	if pluginConfig.PrometheusListenAddr != ":2112" {
+		t.Fatalf("PrometheusListenAddr = %q, want :2112", pluginConfig.PrometheusListenAddr)
+	}
 }
 
 func TestLoadConfigCreatesDefaultOnMissingFile(t *testing.T) {
