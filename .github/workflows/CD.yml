@@ -1,80 +1,122 @@
 name: Build and Create Release
 permissions:
-  "contents": "write"
-  "id-token": "write"
+  contents: write
 
 on:
   push:
     branches:
       - main
     tags:
-      - '**[0-9]+.[0-9]+.[0-9]+*'
+      - 'v*'
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - asset: zoraxycrowdsecbouncer_linux_386
+            goos: linux
+            goarch: '386'
+          - asset: zoraxycrowdsecbouncer_linux_amd64
+            goos: linux
+            goarch: amd64
+          - asset: zoraxycrowdsecbouncer_linux_arm
+            goos: linux
+            goarch: arm
+            goarm: '7'
+          - asset: zoraxycrowdsecbouncer_linux_arm64
+            goos: linux
+            goarch: arm64
+          - asset: zoraxycrowdsecbouncer_linux_mipsle
+            goos: linux
+            goarch: mipsle
+          - asset: zoraxycrowdsecbouncer_linux_riscv64
+            goos: linux
+            goarch: riscv64
+          - asset: zoraxycrowdsecbouncer_windows_amd64.exe
+            goos: windows
+            goarch: amd64
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
 
     - name: Install dependencies
       run: go mod download
 
-    - name: Build
+    - name: Build ${{ matrix.target.asset }}
+      env:
+        CGO_ENABLED: '0'
+        GOOS: ${{ matrix.target.goos }}
+        GOARCH: ${{ matrix.target.goarch }}
+        GOARM: ${{ matrix.target.goarm }}
       run: |
-           go build -o zoraxycrowdsecbouncer
-           chmod +x zoraxycrowdsecbouncer
+        go build -trimpath -ldflags "-s -w" -o "${{ matrix.target.asset }}" .
 
-    - name: generate checksums
+    - name: Generate checksum
       run: |
-        sha256sum zoraxycrowdsecbouncer > zoraxycrowdsecbouncer.sha256
-        sha256sum config.yaml > config.yaml.sha256
+        sha256sum "${{ matrix.target.asset }}" > "${{ matrix.target.asset }}.sha256"
 
     - name: Upload binary artifact
       uses: actions/upload-artifact@v4
       with:
-        name: zoraxycrowdsecbouncer
-        path: zoraxycrowdsecbouncer
-
-    - name: Upload config artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: config.yaml
-        path: config.yaml
+        name: ${{ matrix.target.asset }}
+        path: ${{ matrix.target.asset }}
 
     - name: Upload binary checksum artifact
       uses: actions/upload-artifact@v4
       with:
-        name: zoraxycrowdsecbouncer.sha256
-        path: zoraxycrowdsecbouncer.sha256
+        name: ${{ matrix.target.asset }}.sha256
+        path: ${{ matrix.target.asset }}.sha256
 
-    - name: Upload config checksum artifact
-      uses: actions/upload-artifact@v4
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
       with:
-        name: config.yaml.sha256
-        path: config.yaml.sha256
+        path: dist
+
+    - name: Flatten artifact directories
+      run: |
+        find dist -mindepth 2 -type f -exec mv {} dist/ \;
+
+    - name: Generate config checksum
+      run: sha256sum config.yaml > config.yaml.sha256
 
     - name: Create release body
       id: release_body
       run: |
-          echo "# Release notes for ${{ github.ref_name }}" > release_notes.txt
-          echo "Build date: $(date)" >> release_notes.txt
-          echo "Go version: $(go version)" >> release_notes.txt
-          echo "Commit SHA: ${{ github.sha }}" >> release_notes.txt
-          echo "| File | SHA256 Checksum |" >> release_notes.txt
-          echo "| --- | --- |" >> release_notes.txt
-          echo "| zoraxycrowdsecbouncer | \`$(sha256sum zoraxycrowdsecbouncer | awk '{print $1}')\` |" >> release_notes.txt
-          echo "| config.yaml | \`$(sha256sum config.yaml | awk '{print $1}')\` |" >> release_notes.txt
-          echo "BODY<<EOF" >> $GITHUB_OUTPUT
-          cat release_notes.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+        echo "# Release notes for ${{ github.ref_name }}" > release_notes.txt
+        echo "Build date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> release_notes.txt
+        echo "Commit SHA: ${{ github.sha }}" >> release_notes.txt
+        echo "" >> release_notes.txt
+        echo "| File | SHA256 Checksum |" >> release_notes.txt
+        echo "| --- | --- |" >> release_notes.txt
+        while IFS= read -r checksum_file; do
+          checksum="$(awk '{print $1}' "$checksum_file")"
+          binary_name="$(basename "$checksum_file" .sha256)"
+          echo "| ${binary_name} | \`${checksum}\` |" >> release_notes.txt
+        done < <(find dist -maxdepth 1 -type f -name '*.sha256' | sort)
+        echo "| config.yaml | \`$(awk '{print $1}' config.yaml.sha256)\` |" >> release_notes.txt
+        echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
+        cat release_notes.txt >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
 
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
@@ -85,9 +127,15 @@ jobs:
         generate_release_notes: true
         body: ${{ steps.release_body.outputs.BODY }}
         files: |
-          zoraxycrowdsecbouncer
+          dist/zoraxycrowdsecbouncer_linux_386
+          dist/zoraxycrowdsecbouncer_linux_amd64
+          dist/zoraxycrowdsecbouncer_linux_arm
+          dist/zoraxycrowdsecbouncer_linux_arm64
+          dist/zoraxycrowdsecbouncer_linux_mipsle
+          dist/zoraxycrowdsecbouncer_linux_riscv64
+          dist/zoraxycrowdsecbouncer_windows_amd64.exe
+          dist/*.sha256
           config.yaml
-          zoraxycrowdsecbouncer.sha256
           config.yaml.sha256
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
