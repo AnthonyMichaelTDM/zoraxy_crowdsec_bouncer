@@ -1,0 +1,15 @@
+{
+ "id": "com.anthonyrubick.zoraxycrowdsecbouncer",
+ "name": "Crowdsec Bouncer Plugin for Zoraxy",
+ "author": "Anthony Rubick",
+ "author_contact": "",
+ "description": "This plugin is a Crowdsec bouncer for Zoraxy. It will block requests based on Crowdsec decisions.",
+ "url": "https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer",
+ "type": 0,
+ "version_major": 1,
+ "version_minor": 2,
+ "version_patch": 2,
+ "dynamic_capture_sniff": "/d_sniff",
+ "dynamic_capture_ingress": "/d_capture",
+ "ui_path": "/"
+}
