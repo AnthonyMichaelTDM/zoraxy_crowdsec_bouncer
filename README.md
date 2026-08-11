@@ -117,7 +117,7 @@ agent_url: http://127.0.0.1:8080 # for example
 stream_update_frequency: 10s # How often to retrieve decision deltas from CrowdSec
 log_level: warning # Log level for the bouncer, options: trace, debug, info, warning, error
 is_proxied_behind_cloudflare: true # Set to true if your zoraxy instance is proxied behind Cloudflare
-# JSON file for the exact rolling 24-hour blocked-request aggregate
+# JSON file for the 72-hour, per-minute blocked-request aggregate
 blocked_requests_aggregation_file: blocked-requests-24h.json
 # Optional dedicated listener for Prometheus, e.g. :2112
 prometheus_listen_addr: ""
@@ -139,7 +139,7 @@ In it, you can view some basic information about the bouncer, such as the number
 
 The plugin exposes its Prometheus metrics at `/metrics` in the standard Prometheus text format. This includes `zoraxy_bouncer_blocked_requests` and `zoraxy_bouncer_processed_requests`, labelled by hostname (and decision origin for blocked requests).
 
-`zoraxy_bouncer_blocked_requests_24h` is an exact rolling 24-hour count of blocked requests. It is backed by `blocked_requests_aggregation_file` and survives plugin restarts. The JSON file contains only event timestamp, hostname, and CrowdSec decision origin; it deliberately contains no client IP address, request path, headers, or body.
+`zoraxy_bouncer_blocked_requests_24h` is a rolling 24-hour count of blocked requests, calculated from per-minute buckets retained for 72 hours. It survives plugin restarts and has a maximum one-minute boundary variance. The JSON file contains only bucket timestamp, hostname, CrowdSec decision origin, and count; it deliberately contains no client IP address, request path, headers, or body.
 
 Set `prometheus_listen_addr` (for example, `:2112`) to also start a dedicated scrape listener. It is disabled by default. Bind or publish this port only on a trusted network and apply access controls; metrics may reveal service names and traffic volumes.
 

@@ -27,7 +27,7 @@ stream_update_frequency: 10s
 log_level: warning
 # Set to true if zoraxy is proxied behind Cloudflare
 is_proxied_behind_cloudflare: true
-# Persisted rolling 24-hour block aggregation (contains only timestamp, hostname and origin)
+# Persisted per-minute block aggregation; retains 72 hours (timestamp, hostname and origin only)
 blocked_requests_aggregation_file: blocked-requests-24h.json
 # Optional dedicated Prometheus listener, e.g. :2112. Leave empty to disable.
 prometheus_listen_addr: ""

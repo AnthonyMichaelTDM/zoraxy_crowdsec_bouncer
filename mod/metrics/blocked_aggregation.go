@@ -11,12 +11,17 @@ import (
 	"time"
 )
 
-const BlockedRequestsAggregationWindow = 24 * time.Hour
+const (
+	BlockedRequestsAggregationWindow = 72 * time.Hour
+	BlockedRequestsMetricWindow      = 24 * time.Hour
+	BlockedRequestsBucketDuration    = time.Minute
+)
 
-type BlockedRequestEvent struct {
+type BlockedRequestBucket struct {
 	Timestamp time.Time `json:"timestamp"`
 	Hostname  string    `json:"hostname"`
 	Origin    string    `json:"origin"`
+	Count     uint64    `json:"count,omitempty"`
 }
 
 type BlockedRequestKey struct {
@@ -24,18 +29,23 @@ type BlockedRequestKey struct {
 	Origin   string
 }
 
-// BlockedRequestsAggregator keeps only the events needed to calculate an
-// exact rolling 24-hour block count. It intentionally stores no client IP,
-// request path, headers, or body.
+type blockedRequestBucketKey struct {
+	Timestamp time.Time
+	Hostname  string
+	Origin    string
+}
+
+// BlockedRequestsAggregator retains 72 hours of per-minute block counts. It
+// intentionally stores no client IP, request path, headers, or body.
 type BlockedRequestsAggregator struct {
-	mu     sync.Mutex
-	path   string
-	now    func() time.Time
-	events []BlockedRequestEvent
+	mu      sync.Mutex
+	path    string
+	now     func() time.Time
+	buckets map[blockedRequestBucketKey]uint64
 }
 
 func NewBlockedRequestsAggregator(path string) (*BlockedRequestsAggregator, error) {
-	a := &BlockedRequestsAggregator{path: path, now: time.Now}
+	a := &BlockedRequestsAggregator{path: path, now: time.Now, buckets: make(map[blockedRequestBucketKey]uint64)}
 	if err := a.load(); err != nil {
 		return a, err
 	}
@@ -47,19 +57,22 @@ func (a *BlockedRequestsAggregator) Record(hostname, origin string) (map[Blocked
 	defer a.mu.Unlock()
 
 	now := a.now().UTC()
-	a.events = append(a.events, BlockedRequestEvent{Timestamp: now, Hostname: hostname, Origin: origin})
+	bucketTime := now.Truncate(BlockedRequestsBucketDuration)
+	a.buckets[blockedRequestBucketKey{Timestamp: bucketTime, Hostname: hostname, Origin: origin}]++
 	a.pruneLocked(now)
+	snapshot := a.snapshotLocked(now, BlockedRequestsMetricWindow)
 	if err := a.saveLocked(); err != nil {
-		return a.snapshotLocked(), err
+		return snapshot, err
 	}
-	return a.snapshotLocked(), nil
+	return snapshot, nil
 }
 
-func (a *BlockedRequestsAggregator) Snapshot() map[BlockedRequestKey]uint64 {
+func (a *BlockedRequestsAggregator) Snapshot(window time.Duration) map[BlockedRequestKey]uint64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.pruneLocked(a.now().UTC())
-	return a.snapshotLocked()
+	now := a.now().UTC()
+	a.pruneLocked(now)
+	return a.snapshotLocked(now, window)
 }
 
 func (a *BlockedRequestsAggregator) load() error {
@@ -73,27 +86,39 @@ func (a *BlockedRequestsAggregator) load() error {
 	if err != nil {
 		return fmt.Errorf("read blocked request aggregation: %w", err)
 	}
-	if err := json.Unmarshal(content, &a.events); err != nil {
+	var buckets []BlockedRequestBucket
+	if err := json.Unmarshal(content, &buckets); err != nil {
 		return fmt.Errorf("decode blocked request aggregation: %w", err)
+	}
+	for _, bucket := range buckets {
+		// Version 1 stored one event per item without a count. Preserve those
+		// historical entries when upgrading to per-minute buckets.
+		if bucket.Count == 0 {
+			bucket.Count = 1
+		}
+		bucket.Timestamp = bucket.Timestamp.UTC().Truncate(BlockedRequestsBucketDuration)
+		a.buckets[blockedRequestBucketKey{Timestamp: bucket.Timestamp, Hostname: bucket.Hostname, Origin: bucket.Origin}] += bucket.Count
 	}
 	a.pruneLocked(a.now().UTC())
 	return nil
 }
 
 func (a *BlockedRequestsAggregator) pruneLocked(now time.Time) {
-	cutoff := now.Add(-BlockedRequestsAggregationWindow)
-	first := sort.Search(len(a.events), func(i int) bool {
-		return !a.events[i].Timestamp.Before(cutoff)
-	})
-	if first > 0 {
-		a.events = append([]BlockedRequestEvent(nil), a.events[first:]...)
+	cutoff := now.Add(-BlockedRequestsAggregationWindow).Truncate(BlockedRequestsBucketDuration)
+	for key := range a.buckets {
+		if key.Timestamp.Before(cutoff) {
+			delete(a.buckets, key)
+		}
 	}
 }
 
-func (a *BlockedRequestsAggregator) snapshotLocked() map[BlockedRequestKey]uint64 {
+func (a *BlockedRequestsAggregator) snapshotLocked(now time.Time, window time.Duration) map[BlockedRequestKey]uint64 {
+	cutoff := now.Add(-window).Truncate(BlockedRequestsBucketDuration)
 	snapshot := make(map[BlockedRequestKey]uint64)
-	for _, event := range a.events {
-		snapshot[BlockedRequestKey{Hostname: event.Hostname, Origin: event.Origin}]++
+	for key, count := range a.buckets {
+		if !key.Timestamp.Before(cutoff) {
+			snapshot[BlockedRequestKey{Hostname: key.Hostname, Origin: key.Origin}] += count
+		}
 	}
 	return snapshot
 }
@@ -102,7 +127,20 @@ func (a *BlockedRequestsAggregator) saveLocked() error {
 	if err := os.MkdirAll(filepath.Dir(a.path), 0o755); err != nil {
 		return fmt.Errorf("create blocked request aggregation directory: %w", err)
 	}
-	content, err := json.Marshal(a.events)
+	buckets := make([]BlockedRequestBucket, 0, len(a.buckets))
+	for key, count := range a.buckets {
+		buckets = append(buckets, BlockedRequestBucket{Timestamp: key.Timestamp, Hostname: key.Hostname, Origin: key.Origin, Count: count})
+	}
+	sort.Slice(buckets, func(i, j int) bool {
+		if !buckets[i].Timestamp.Equal(buckets[j].Timestamp) {
+			return buckets[i].Timestamp.Before(buckets[j].Timestamp)
+		}
+		if buckets[i].Hostname != buckets[j].Hostname {
+			return buckets[i].Hostname < buckets[j].Hostname
+		}
+		return buckets[i].Origin < buckets[j].Origin
+	})
+	content, err := json.Marshal(buckets)
 	if err != nil {
 		return fmt.Errorf("encode blocked request aggregation: %w", err)
 	}

@@ -105,7 +105,7 @@ func NewMetricsHandler(logger *logrus.Logger, aggregationPath string) *MetricsHa
 		Lock:                      sync.RWMutex{},
 		blockedRequestsAggregator: aggregator,
 	}
-	mh.refreshBlockedRequests24hMetric(aggregator.Snapshot())
+	mh.refreshBlockedRequests24hMetric(aggregator.Snapshot(BlockedRequestsMetricWindow))
 
 	return mh
 }
@@ -152,7 +152,7 @@ func (mh *MetricsHandler) MetricsUpdater(met *models.RemediationComponentsMetric
 
 	mh.Lock.RLock()
 	defer mh.Lock.RUnlock()
-	mh.refreshBlockedRequests24hMetric(mh.blockedRequestsAggregator.Snapshot())
+	mh.refreshBlockedRequests24hMetric(mh.blockedRequestsAggregator.Snapshot(BlockedRequestsMetricWindow))
 
 	// Most of the common fields are set automatically by the metrics provider
 	// We only need to care about the metrics themselves
