@@ -9,7 +9,11 @@
  "version_major": 1,
  "version_minor": 2,
  "version_patch": 3,
+ "static_capture_paths": null,
+ "static_capture_ingress": "",
  "dynamic_capture_sniff": "/d_sniff",
  "dynamic_capture_ingress": "/d_capture",
- "ui_path": "/"
+ "ui_path": "/",
+ "subscription_path": "",
+ "subscriptions_events": null
 }
