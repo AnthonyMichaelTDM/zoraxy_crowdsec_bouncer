@@ -45,7 +45,11 @@ type BlockedRequestsAggregator struct {
 }
 
 func NewBlockedRequestsAggregator(path string) (*BlockedRequestsAggregator, error) {
-	a := &BlockedRequestsAggregator{path: path, now: time.Now, buckets: make(map[blockedRequestBucketKey]uint64)}
+	return newBlockedRequestsAggregator(path, time.Now)
+}
+
+func newBlockedRequestsAggregator(path string, now func() time.Time) (*BlockedRequestsAggregator, error) {
+	a := &BlockedRequestsAggregator{path: path, now: now, buckets: make(map[blockedRequestBucketKey]uint64)}
 	if err := a.load(); err != nil {
 		return a, err
 	}

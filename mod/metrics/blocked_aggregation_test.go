@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -38,5 +39,37 @@ func TestBlockedRequestsAggregatorPersistsMinuteBucketsAndRetains72Hours(t *test
 	reloaded.now = func() time.Time { return base.Add(73 * time.Hour) }
 	if got := len(reloaded.Snapshot(BlockedRequestsAggregationWindow)); got != 0 {
 		t.Fatalf("72-hour snapshot length = %d, want 0", got)
+	}
+}
+
+func TestBlockedRequestsAggregatorLoadsSampleData(t *testing.T) {
+	fixturePath := filepath.Join("testdata", "blocked-requests-sample.json")
+	content, err := os.ReadFile(fixturePath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) error = %v", fixturePath, err)
+	}
+	path := filepath.Join(t.TempDir(), "blocked-requests-24h.json")
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	now := time.Date(2026, time.August, 11, 14, 42, 0, 0, time.UTC)
+	aggregator, err := newBlockedRequestsAggregator(path, func() time.Time { return now })
+	if err != nil {
+		t.Fatalf("newBlockedRequestsAggregator() error = %v", err)
+	}
+
+	snapshot := aggregator.Snapshot(BlockedRequestsMetricWindow)
+	var total uint64
+	for _, count := range snapshot {
+		total += count
+	}
+	if total != 18 {
+		t.Fatalf("total blocks = %d, want 18", total)
+	}
+	if got := snapshot[BlockedRequestKey{Hostname: "pve2.patking73.ch", Origin: "crowdsec"}]; got != 9 {
+		t.Fatalf("pve2 CrowdSec blocks = %d, want 9", got)
+	}
+	if got := snapshot[BlockedRequestKey{Hostname: "pve2.patking73.ch", Origin: "cscli"}]; got != 5 {
+		t.Fatalf("pve2 cscli blocks = %d, want 5", got)
 	}
 }
