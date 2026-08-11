@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/web"
 	"github.com/sirupsen/logrus"
@@ -34,6 +35,7 @@ func main() {
 	logger.Level = config.LogLevel
 
 	g, ctx := errgroup.WithContext(context.Background())
+	metrics.Map.MustRegisterAll()
 
 	// Initialize the web UI
 	web.InitWebServer(logger, g, ctx, PORT, web.ConfigStatusResponse{
