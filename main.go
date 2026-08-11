@@ -26,11 +26,11 @@ func main() {
 	// This will print the plugin introspect and exit if the -introspect flag is provided
 	pluginIntoSpect := &plugin.IntroSpect{
 		ID:            info.PLUGIN_ID,
-		Name:          "Crowdsec Bouncer Plugin for Zoraxy",
-		Author:        "Anthony Rubick",
-		AuthorContact: "",
-		Description:   "This plugin is a Crowdsec bouncer for Zoraxy. It will block requests based on Crowdsec decisions.",
-		URL:           "https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer",
+		Name:          info.PLUGIN_NAME,
+		Author:        info.PLUGIN_AUTHOR,
+		AuthorContact: info.PLUGIN_AUTHOR_CONTACT,
+		Description:   info.PLUGIN_DESCRIPTION,
+		URL:           info.PLUGIN_URL,
 		Type:          plugin.PluginType_Router,
 		VersionMajor:  info.VERSION_MAJOR,
 		VersionMinor:  info.VERSION_MINOR,
