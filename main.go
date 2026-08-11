@@ -11,6 +11,7 @@ import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/decisions"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/dynamiccapture"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/events"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
@@ -140,6 +141,7 @@ func main() {
 	// errGroup and context for plugin goroutines
 	g, ctx := errgroup.WithContext(context.Background())
 	decisionCache := decisions.NewCache()
+	blockedEvents := events.NewBlockedEvents(events.DefaultCapacity)
 
 	// initialize metrics and register custom and CrowdSec metrics
 	metricsHandler := metrics.NewMetricsHandler(logger)
@@ -159,13 +161,13 @@ func main() {
 		We will also print the request information to the console for debugging purposes.
 	*/
 	pathRouter.RegisterDynamicSniffHandler("/d_sniff", http.DefaultServeMux, func(dsfr *plugin.DynamicSniffForwardRequest) plugin.SniffResult {
-		return dynamiccapture.SniffHandler(logger, metricsHandler, pluginConfig, dsfr, decisionCache)
+		return dynamiccapture.SniffHandler(logger, metricsHandler, blockedEvents, pluginConfig, dsfr, decisionCache)
 	})
 	pathRouter.RegisterDynamicCaptureHandle(info.DYNAMIC_CAPTURE_INGRESS, http.DefaultServeMux, func(w http.ResponseWriter, r *http.Request) {
 		dynamiccapture.CaptureHandler(logger, w, r)
 	})
 
-	web.InitWebServer(logger, g, ctx, runtimeCfg.Port, configStatus)
+	web.InitWebServer(logger, g, ctx, runtimeCfg.Port, configStatus, blockedEvents)
 
 	// Handle signals
 	utils.StartSignalHandler(logger, g, ctx)

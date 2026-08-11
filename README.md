@@ -131,6 +131,8 @@ The web UI is available from the Zoraxy web interface in the "Plugins" section.
 
 In it, you can view some basic information about the bouncer, such as the number of requests processed and dropped by the bouncer for each hostname.
 
+The UI also shows the most recent 200 blocked connections from the current plugin session. To avoid retaining secrets, it stores only masked client networks, the hostname, request method and path (without query string), and CrowdSec decision metadata. It never stores request headers or bodies.
+
 ### Onboarding Mode
 
 If `api_key` is not set yet, the plugin starts in onboarding mode. In this state,

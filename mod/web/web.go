@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/events"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/info"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
@@ -36,10 +37,6 @@ type MetricsResponse struct {
 	Error             string             `json:"error,omitempty"`
 }
 
-type HeadersResponse struct {
-	Headers map[string][]string `json:"headers"`
-}
-
 type ConfigStatusResponse struct {
 	Onboarding      bool     `json:"onboarding"`
 	BlockingEnabled bool     `json:"blockingEnabled"`
@@ -51,6 +48,8 @@ var runtimeConfigStatus = ConfigStatusResponse{
 	Onboarding:      false,
 	BlockingEnabled: true,
 }
+
+var blockedEventsStore = events.NewBlockedEvents(events.DefaultCapacity)
 
 // API handlers
 func apiVersionHandler(w http.ResponseWriter, r *http.Request) {
@@ -142,19 +141,9 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-func apiHeadersHandler(w http.ResponseWriter, r *http.Request) {
+func apiBlockedEventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-
-	response := HeadersResponse{
-		Headers: make(map[string][]string),
-	}
-
-	// Copy all headers
-	for name, values := range r.Header {
-		response.Headers[name] = values
-	}
-
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(blockedEventsStore.Snapshot())
 }
 
 func apiConfigStatusHandler(w http.ResponseWriter, r *http.Request) {
@@ -254,8 +243,11 @@ func versionCheck() (string, error) {
 // Also sets up a shutdown handler for graceful shutdown.
 //
 // Runs everything on the default serve mux.
-func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, port int, configStatus ConfigStatusResponse) {
+func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, port int, configStatus ConfigStatusResponse, blockedEvents *events.BlockedEvents) {
 	runtimeConfigStatus = configStatus
+	if blockedEvents != nil {
+		blockedEventsStore = blockedEvents
+	}
 
 	mux := http.DefaultServeMux
 
@@ -266,7 +258,7 @@ func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context
 	// Add API endpoints
 	mux.HandleFunc(info.UI_PATH+"api/version", apiVersionHandler)
 	mux.HandleFunc(info.UI_PATH+"api/metrics", apiMetricsHandler)
-	mux.HandleFunc(info.UI_PATH+"api/headers", apiHeadersHandler)
+	mux.HandleFunc(info.UI_PATH+"api/blocked-events", apiBlockedEventsHandler)
 	mux.HandleFunc(info.UI_PATH+"api/config-status", apiConfigStatusHandler)
 
 	serverAddr := fmt.Sprintf("127.0.0.1:%d", port)
