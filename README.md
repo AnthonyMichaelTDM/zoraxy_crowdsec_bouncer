@@ -166,6 +166,12 @@ make test-env-logs
 make test-env-down
 ```
 
+Both `make test-env-onboarding` and `make test-env-ready` also pre-generate the
+local Zoraxy config needed for this test stack:
+
+- a proxy rule for `crowdsec-bouncer-test-webserver` -> `test_webserver:5678`
+- a `protected` plugin group containing `com.anthonyrubick.zoraxycrowdsecbouncer`
+
 ### 1. Build the plugin into the mounted plugin directory
 
 ```bash
@@ -208,13 +214,15 @@ When running in compose, set:
 agent_url: http://crowdsec:8080
 ```
 
-### 4. Enable and wire the plugin in Zoraxy
+### 4. Verify the preloaded Zoraxy config
 
-1. Enable the plugin from the Plugins page.
-2. Add the plugin to a tag.
-3. Add one or more proxy rules to the same tag.
+The local test bootstrap preloads the proxy route and plugin group for you.
 
-For quick local traffic testing, create a proxy route in Zoraxy that forwards to `http://test_webserver:5678`.
+In Zoraxy, verify that:
+
+1. the plugin is enabled from the Plugins page.
+2. the `protected` plugin group contains the CrowdSec bouncer plugin.
+3. the `crowdsec-bouncer-test-webserver` host rule exists and is tagged with `protected`.
 
 ### 5. Test first-start and onboarding behavior
 

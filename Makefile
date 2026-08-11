@@ -16,6 +16,7 @@ CROWDSEC_BOUNCER_NAME ?= zoraxy-crowdsec-bouncer-local
 .PHONY: test-env-up test-env-down test-env-logs test-env-status
 .PHONY: test-env-dirs test-env-build test-env-restart-zoraxy
 .PHONY: test-env-config-onboarding test-env-api-key test-env-config-ready
+.PHONY: test-env-zoraxy-proxy-rule test-env-zoraxy-plugin-groups test-env-zoraxy-config
 
 help:
 	@echo "Available targets:"
@@ -34,9 +35,9 @@ test:
 vet:
 	go vet ./...
 
-test-env-onboarding: test-env-up test-env-config-onboarding test-env-restart-zoraxy test-env-status
+test-env-onboarding: test-env-up test-env-config-onboarding test-env-zoraxy-config test-env-restart-zoraxy test-env-status
 
-test-env-ready: test-env-up test-env-api-key test-env-config-ready test-env-restart-zoraxy test-env-status
+test-env-ready: test-env-up test-env-api-key test-env-config-ready test-env-zoraxy-config test-env-restart-zoraxy test-env-status
 
 test-env-up: test-env-build
 	$(COMPOSE) up -d crowdsec test_webserver zoraxy
@@ -55,6 +56,7 @@ test-env-status:
 test-env-dirs:
 	mkdir -p "$(PLUGIN_DIR)"
 	mkdir -p build/config
+	mkdir -p build/config/conf/proxy
 	mkdir -p build/crowdsec/config
 	mkdir -p build/crowdsec/data
 
@@ -111,3 +113,14 @@ test-env-config-ready: test-env-dirs test-env-api-key
 
 test-env-restart-zoraxy:
 	$(COMPOSE) restart zoraxy
+
+# These targets are used to generate some of the config files that Zoraxy expects
+
+test-env-zoraxy-proxy-rule: test-env-dirs
+	@printf '{"ProxyType": 1,"RootOrMatchingDomain": "crowdsec-bouncer-test-webserver","ActiveOrigins": [{"OriginIpOrDomain": "crowdsec-bouncer-test-webserver:5678","RequireTLS": false,"SkipCertValidations": false,"SkipWebSocketOriginCheck": true,"Weight": 1,"MaxConn": 0,"RespTimeout": 0}],"TlsOptions": {"DisableSNI": false,"DisableLegacyCertificateMatching": false,"EnableAutoHTTPS": false,"PreferredCertificate": {}},"Tags": ["protected"]}' | jq . > build/config/conf/proxy/crowdsec-bouncer-test-webserver.config
+
+test-env-zoraxy-plugin-groups: test-env-dirs
+	@printf '%s\n' '{"protected":["com.anthonyrubick.zoraxycrowdsecbouncer"]}' > build/config/conf/plugin_groups.json
+
+test-env-zoraxy-config: test-env-zoraxy-proxy-rule test-env-zoraxy-plugin-groups 
+
