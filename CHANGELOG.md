@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Updated local test environment documentation and proxy rule generation for browser testing through Zoraxy at https://localhost:8443 by @AnthonyMichaelTDM.
+
 ## v1.2.2
 
 - Updated dependencies to address security vulnerabilities by @AnthonyMichaelTDM in #37.

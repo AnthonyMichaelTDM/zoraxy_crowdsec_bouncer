@@ -50,7 +50,8 @@ test-env-logs:
 
 test-env-status:
 	@echo "Zoraxy UI: http://localhost:8000"
-	@echo "Test upstream through compose network: http://test_webserver:5678"
+	@echo "Test route through Zoraxy: https://localhost:8443"
+	@echo "Direct upstream through compose network: http://test_webserver:5678"
 	@echo "Plugin config path: $(PLUGIN_CONFIG)"
 
 test-env-dirs:
@@ -117,7 +118,8 @@ test-env-restart-zoraxy:
 # These targets are used to generate some of the config files that Zoraxy expects
 
 test-env-zoraxy-proxy-rule: test-env-dirs
-	@printf '{"ProxyType": 1,"RootOrMatchingDomain": "crowdsec-bouncer-test-webserver","ActiveOrigins": [{"OriginIpOrDomain": "crowdsec-bouncer-test-webserver:5678","RequireTLS": false,"SkipCertValidations": false,"SkipWebSocketOriginCheck": true,"Weight": 1,"MaxConn": 0,"RespTimeout": 0}],"TlsOptions": {"DisableSNI": false,"DisableLegacyCertificateMatching": false,"EnableAutoHTTPS": false,"PreferredCertificate": {}},"Tags": ["protected"]}' | jq . > build/config/conf/proxy/crowdsec-bouncer-test-webserver.config
+	@printf '{"ProxyType": 1,"RootOrMatchingDomain": "localhost","ActiveOrigins": [{"OriginIpOrDomain": "crowdsec-bouncer-test-webserver:5678","RequireTLS": false,"SkipCertValidations": false,"SkipWebSocketOriginCheck": true,"Weight": 1,"MaxConn": 0,"RespTimeout": 0}],"TlsOptions": {"DisableSNI": false,"DisableLegacyCertificateMatching": false,"EnableAutoHTTPS": false,"PreferredCertificate": {}},"Tags": ["protected"]}' | jq . > build/config/conf/proxy/localhost.config
+	@rm -f build/config/conf/proxy/crowdsec-bouncer-test-webserver.config
 
 test-env-zoraxy-plugin-groups: test-env-dirs
 	@printf '%s\n' '{"protected":["com.anthonyrubick.zoraxycrowdsecbouncer"]}' > build/config/conf/plugin_groups.json
