@@ -117,7 +117,10 @@ test-env-restart-zoraxy:
 
 # These targets are used to generate some of the config files that Zoraxy expects
 
-test-env-zoraxy-proxy-rule: test-env-dirs
+test-env-jq-installed:
+	@command -v jq >/dev/null 2>&1 || { echo "jq is required (please install jq)"; exit 1; }
+
+test-env-zoraxy-proxy-rule: test-env-dirs jq-installed
 	@printf '{"ProxyType": 1,"RootOrMatchingDomain": "localhost","ActiveOrigins": [{"OriginIpOrDomain": "crowdsec-bouncer-test-webserver:5678","RequireTLS": false,"SkipCertValidations": false,"SkipWebSocketOriginCheck": true,"Weight": 1,"MaxConn": 0,"RespTimeout": 0}],"TlsOptions": {"DisableSNI": false,"DisableLegacyCertificateMatching": false,"EnableAutoHTTPS": false,"PreferredCertificate": {}},"Tags": ["protected"]}' | jq . > build/config/conf/proxy/localhost.config
 	@rm -f build/config/conf/proxy/crowdsec-bouncer-test-webserver.config
 

@@ -17,8 +17,8 @@ const (
 
 	VERSION_MAJOR  = 1
 	VERSION_MINOR  = 2
-	VERSION_PATCH  = 2
-	VERSION_STRING = "v1.2.2"
+	VERSION_PATCH  = 3
+	VERSION_STRING = "v1.2.3"
 
 	// BOUNCER_USER_AGENT must use the name/version format expected by CrowdSec's LAPI.
 	BOUNCER_USER_AGENT = BOUNCER_TYPE + "/" + VERSION_STRING

@@ -211,8 +211,7 @@
 					statusContainer.innerHTML = `
 						<div class="ui message error">
 							<div class="header">Unable to load configuration status</div>
-							<p>${wrapError(`Failed to fetch config status: ${xhr.status} ${xhr.statusText}`)}</p>
-						</div>
+ 							<p>${wrapError('Failed to fetch config status: ' + xhr.status + ' ' + xhr.statusText)}</p>						</div>
 					`;
 				}
 			});

@@ -8,7 +8,7 @@
  "type": 0,
  "version_major": 1,
  "version_minor": 2,
- "version_patch": 2,
+ "version_patch": 3,
  "dynamic_capture_sniff": "/d_sniff",
  "dynamic_capture_ingress": "/d_capture",
  "ui_path": "/"

@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func start_bouncer(g *errgroup.Group, ctx context.Context, pluginConfig *config.PluginConfig, logger *logrus.Logger, decisionCache *decisions.Cache, metricsHandler *metrics.MetricsHandler) {
+func startBouncer(g *errgroup.Group, ctx context.Context, pluginConfig *config.PluginConfig, logger *logrus.Logger, decisionCache *decisions.Cache, metricsHandler *metrics.MetricsHandler) {
 
 	// Initialize the CrowdSec stream bouncer. It keeps the decision cache local
 	// and only requests deltas from LAPI at the configured interval.
@@ -147,7 +147,7 @@ func main() {
 	prometheus.MustRegister(csbouncer.TotalLAPICalls, csbouncer.TotalLAPIError)
 
 	if !onboardingMode {
-		start_bouncer(g, ctx, pluginConfig, logger, decisionCache, metricsHandler)
+		startBouncer(g, ctx, pluginConfig, logger, decisionCache, metricsHandler)
 	}
 
 	/*
