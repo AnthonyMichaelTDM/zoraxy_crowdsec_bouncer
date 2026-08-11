@@ -89,15 +89,18 @@ jobs:
       with:
         path: dist
 
-    - name: Flatten artifact directories
+    - name: Gather release artifacts
+      id: release_files
       run: |
-        find dist -mindepth 2 -type f | while read -r file; do
-          basename=$(basename "$file")
-          tmpfile=$(mktemp -p dist tmp.XXXXXX)
-          mv "$file" "$tmpfile"
-          mv "$tmpfile" "dist/$basename"
-        done
-        find dist -mindepth 1 -type d -empty -delete
+        echo "files<<EOF" >> "$GITHUB_OUTPUT"
+        find dist -type f | sort >> "$GITHUB_OUTPUT"
+        echo "config.yaml" >> "$GITHUB_OUTPUT"
+        echo "config.yaml.sha256" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+        echo "sha256_files<<EOF" >> "$GITHUB_OUTPUT"
+        find dist -type f -name '*.sha256' | sort >> "$GITHUB_OUTPUT"
+        echo "config.yaml.sha256" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
 
     - name: Setup Go
       uses: actions/setup-go@v5
@@ -121,7 +124,7 @@ jobs:
           checksum="$(awk '{print $1}' "$checksum_file")"
           binary_name="$(basename "$checksum_file" .sha256)"
           echo "| ${binary_name} | \`${checksum}\` |" >> release_notes.txt
-        done < <(find dist -type f -name '*.sha256' | sort)
+        done < <(printf '%s\n' "${{ steps.release_files.outputs.sha256_files }}")
         echo "| config.yaml | \`$(awk '{print $1}' config.yaml.sha256)\` |" >> release_notes.txt
         echo "BODY<<EOF" >> "$GITHUB_OUTPUT"
         cat release_notes.txt >> "$GITHUB_OUTPUT"
@@ -138,17 +141,7 @@ jobs:
         prerelease: true
         generate_release_notes: true
         body: ${{ steps.release_body.outputs.BODY }}
-        files: |
-          dist/zoraxycrowdsecbouncer_linux_386
-          dist/zoraxycrowdsecbouncer_linux_amd64
-          dist/zoraxycrowdsecbouncer_linux_arm
-          dist/zoraxycrowdsecbouncer_linux_arm64
-          dist/zoraxycrowdsecbouncer_linux_mipsle
-          dist/zoraxycrowdsecbouncer_linux_riscv64
-          dist/zoraxycrowdsecbouncer_windows_amd64.exe
-          dist/*.sha256
-          config.yaml
-          config.yaml.sha256
+        files: ${{ steps.release_files.outputs.files }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
