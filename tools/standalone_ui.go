@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/events"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/web"
 	"github.com/sirupsen/logrus"
@@ -39,7 +40,7 @@ func main() {
 	web.InitWebServer(logger, g, ctx, PORT, web.ConfigStatusResponse{
 		Onboarding:      false,
 		BlockingEnabled: true,
-	})
+	}, events.NewBlockedEvents(events.DefaultCapacity, events.IPModeMasked))
 
 	// Handle signals
 	utils.StartSignalHandler(logrus.StandardLogger(), g, ctx)

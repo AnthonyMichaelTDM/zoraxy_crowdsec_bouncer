@@ -13,6 +13,7 @@ import (
 )
 
 const DefaultStreamUpdateFrequency = "10s"
+const DefaultBlockedEventsIPMode = "masked"
 const PlaceholderAPIKey = "<CROWDSEC_BOUNCER_API_KEY>"
 
 var ErrConfigCreated = errors.New("config file created")
@@ -26,6 +27,8 @@ stream_update_frequency: 10s
 log_level: warning
 # Set to true if zoraxy is proxied behind Cloudflare
 is_proxied_behind_cloudflare: true
+# IP address display in Recent Blocked Connections: masked (default) or full
+blocked_events_ip_mode: masked
 `
 
 type PluginConfig struct {
@@ -34,6 +37,7 @@ type PluginConfig struct {
 	StreamUpdateFrequency     string `yaml:"stream_update_frequency"`
 	LogLevelString            string `yaml:"log_level"`
 	IsProxiedBehindCloudflare bool   `yaml:"is_proxied_behind_cloudflare"`
+	BlockedEventsIPMode       string `yaml:"blocked_events_ip_mode"`
 
 	LogLevel logrus.Level `yaml:"-"`
 }
@@ -69,6 +73,14 @@ func (p *PluginConfig) PostProcess() error {
 
 	if p.StreamUpdateFrequency == "" {
 		p.StreamUpdateFrequency = DefaultStreamUpdateFrequency
+	}
+
+	p.BlockedEventsIPMode = strings.ToLower(strings.TrimSpace(p.BlockedEventsIPMode))
+	if p.BlockedEventsIPMode == "" {
+		p.BlockedEventsIPMode = DefaultBlockedEventsIPMode
+	}
+	if p.BlockedEventsIPMode != "masked" && p.BlockedEventsIPMode != "full" {
+		return fmt.Errorf("invalid blocked_events_ip_mode %q: must be masked or full", p.BlockedEventsIPMode)
 	}
 	return nil
 }

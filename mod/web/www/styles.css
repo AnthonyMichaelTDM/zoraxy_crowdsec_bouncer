@@ -19,6 +19,19 @@ pre {
     word-wrap: break-word;
 }
 
+.event-note {
+    color: var(--text_color);
+    opacity: 0.8;
+}
+
+.events-table-wrapper {
+    overflow-x: auto;
+}
+
+.events-table {
+    min-width: 900px;
+}
+
 /* Tooltip styling */
 .tooltip {
     cursor: help;
