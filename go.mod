@@ -5,7 +5,7 @@ go 1.26.1
 toolchain go1.26.5
 
 require (
-	github.com/crowdsecurity/crowdsec v1.7.8
+	github.com/crowdsecurity/crowdsec v1.8.1
 	github.com/crowdsecurity/go-cs-bouncer v0.0.21
 	github.com/crowdsecurity/go-cs-lib v0.0.25
 	github.com/prometheus/client_golang v1.24.1
@@ -58,8 +58,8 @@ require (
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/net v0.57.0 // indirect
+	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
+	golang.org/x/text v0.41.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
