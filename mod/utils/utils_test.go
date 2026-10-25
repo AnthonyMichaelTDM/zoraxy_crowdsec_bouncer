@@ -96,11 +96,32 @@ func TestGetRealIP(t *testing.T) {
 			expected:  "203.0.113.10",
 		},
 		{
-			name:       "X-Real-IP takes precedence over CF-Connecting-IP",
+			name:       "CF-Connecting-IP takes precedence over X-Real-IP when behind Cloudflare",
+			remoteAddr: "192.168.1.100:8080",
+			headers: map[string][]string{
+				// Cloudflare -> WAF -> Zoraxy: the WAF sets X-Real-IP to its
+				// peer, a Cloudflare edge address; only CF-Connecting-IP is the visitor.
+				"X-Real-IP":        {"172.70.0.10"},
+				"CF-Connecting-IP": {"203.0.113.10"},
+			},
+			isProxied: true,
+			expected:  "203.0.113.10",
+		},
+		{
+			name:       "X-Real-IP still takes precedence over CF-Connecting-IP when not behind Cloudflare",
 			remoteAddr: "192.168.1.100:8080",
 			headers: map[string][]string{
 				"X-Real-IP":        {"10.0.0.5"},
 				"CF-Connecting-IP": {"203.0.113.10"},
+			},
+			isProxied: false,
+			expected:  "10.0.0.5",
+		},
+		{
+			name:       "X-Real-IP used when behind Cloudflare but CF-Connecting-IP is missing",
+			remoteAddr: "192.168.1.100:8080",
+			headers: map[string][]string{
+				"X-Real-IP": {"10.0.0.5"},
 			},
 			isProxied: true,
 			expected:  "10.0.0.5",
