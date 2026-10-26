@@ -17,6 +17,7 @@ import (
 type Cache struct {
 	mu        sync.RWMutex
 	decisions map[int64]*models.Decision
+	byPrefix  map[netip.Prefix]*models.Decision
 }
 
 func NewCache() *Cache {
@@ -25,7 +26,7 @@ func NewCache() *Cache {
 
 // Apply updates the cache with one response from /v1/decisions/stream.
 func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
-	if update == nil {
+	if update == nil || (len(update.New) == 0 && len(update.Deleted) == 0) {
 		return
 	}
 
@@ -44,6 +45,37 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 		}
 		c.decisions[decision.ID] = decision
 	}
+
+	// Parse once per stream update, not once per decision per HTTP request.
+	c.byPrefix = make(map[netip.Prefix]*models.Decision, len(c.decisions))
+	for _, d := range c.decisions {
+		if d.Scope == nil || d.Value == nil {
+			continue
+		}
+		var prefix netip.Prefix
+		if ip, err := netip.ParseAddr(*d.Value); err == nil && strings.EqualFold(*d.Scope, "ip") {
+			prefix = netip.PrefixFrom(ip, ip.BitLen())
+		} else {
+			var err error
+			prefix, err = netip.ParsePrefix(*d.Value)
+			if err != nil {
+				continue
+			}
+			prefix = prefix.Masked()
+		}
+		specificity, valid := decisionMatchSpecificity(d, prefix.Addr())
+		if !valid {
+			continue
+		}
+		previous := c.byPrefix[prefix]
+		if previous != nil {
+			previousSpecificity, _ := decisionMatchSpecificity(previous, prefix.Addr())
+			if previousSpecificity > specificity || (previousSpecificity == specificity && previous.ID > d.ID) {
+				continue
+			}
+		}
+		c.byPrefix[prefix] = d
+	}
 }
 
 // GetBan returns the most specific matching IP or CIDR ban decision, if any.
@@ -56,20 +88,13 @@ func (c *Cache) GetBan(rawIP string) *models.Decision {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var best *models.Decision
-	bestSpecificity := -1
-	for _, decision := range c.decisions {
-		specificity, matches := decisionMatchSpecificity(decision, ip)
-		if !matches {
-			continue
-		}
-		if best == nil || specificity > bestSpecificity || (specificity == bestSpecificity && decision.ID > best.ID) {
-			best = decision
-			bestSpecificity = specificity
+	// Longest-prefix lookup: at most 33 IPv4 or 129 IPv6 hash lookups.
+	for bits := ip.BitLen(); bits >= 0; bits-- {
+		if decision := c.byPrefix[netip.PrefixFrom(ip, bits).Masked()]; decision != nil {
+			return decision
 		}
 	}
-
-	return best
+	return nil
 }
 
 func decisionMatchSpecificity(decision *models.Decision, ip netip.Addr) (int, bool) {
