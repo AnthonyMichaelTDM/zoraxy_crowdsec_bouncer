@@ -6,22 +6,42 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/crowdsecurity/crowdsec/pkg/models"
+	"github.com/gaissmai/bart"
 )
 
-// Cache applies decision stream updates and offers lock-safe IP lookups.
+// Cache applies decision stream updates and offers lock-free IP lookups.
 // CrowdSec sends deleted decisions as well as new decisions, so the cache can
 // retain its last known-good state while a later stream update temporarily
 // fails.
 type Cache struct {
-	mu        sync.RWMutex
+	// mu serializes writers; readers never take it.
+	mu sync.Mutex
 	decisions map[int64]*models.Decision
-	byPrefix  map[netip.Prefix]*models.Decision
+	// atomic pointer to the current trie for lock-free reads
+	triePtr atomic.Pointer[bart.Table[*models.Decision]]
 }
 
 func NewCache() *Cache {
-	return &Cache{decisions: make(map[int64]*models.Decision)}
+	c := &Cache{decisions: make(map[int64]*models.Decision)}
+	c.triePtr.Store(new(bart.Table[*models.Decision]))
+	return c
+}
+
+func prefixFromDecision(decision *models.Decision) (netip.Prefix, bool) {
+	if decision == nil || decision.Value == nil || decision.Scope == nil {
+		return netip.Prefix{}, false
+	}
+	if ip, err := netip.ParseAddr(*decision.Value); err == nil && strings.EqualFold(*decision.Scope, "ip") {
+		return netip.PrefixFrom(ip, ip.BitLen()), true
+	}
+	prefix, err := netip.ParsePrefix(*decision.Value)
+	if err != nil {
+		return netip.Prefix{}, false
+	}
+	return prefix.Masked(), true
 }
 
 // Apply updates the cache with one response from /v1/decisions/stream.
@@ -32,10 +52,18 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	next := c.triePtr.Load().Clone() // copy-on-write
 
 	for _, decision := range update.Deleted {
 		if decision != nil {
+			// Remove the decision from the map
 			delete(c.decisions, decision.ID)
+			// and from the prefix trie
+			prefix, ok := prefixFromDecision(decision)
+			if !ok {
+				continue
+			}
+			next.Delete(prefix)
 		}
 	}
 
@@ -44,38 +72,14 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 			continue
 		}
 		c.decisions[decision.ID] = decision
-	}
-
-	// Parse once per stream update, not once per decision per HTTP request.
-	c.byPrefix = make(map[netip.Prefix]*models.Decision, len(c.decisions))
-	for _, d := range c.decisions {
-		if d.Scope == nil || d.Value == nil {
+		// Add the decision to the prefix trie
+		prefix, ok := prefixFromDecision(decision)
+		if !ok {
 			continue
 		}
-		var prefix netip.Prefix
-		if ip, err := netip.ParseAddr(*d.Value); err == nil && strings.EqualFold(*d.Scope, "ip") {
-			prefix = netip.PrefixFrom(ip, ip.BitLen())
-		} else {
-			var err error
-			prefix, err = netip.ParsePrefix(*d.Value)
-			if err != nil {
-				continue
-			}
-			prefix = prefix.Masked()
-		}
-		specificity, valid := decisionMatchSpecificity(d, prefix.Addr())
-		if !valid {
-			continue
-		}
-		previous := c.byPrefix[prefix]
-		if previous != nil {
-			previousSpecificity, _ := decisionMatchSpecificity(previous, prefix.Addr())
-			if previousSpecificity > specificity || (previousSpecificity == specificity && previous.ID > d.ID) {
-				continue
-			}
-		}
-		c.byPrefix[prefix] = d
+		next.Insert(prefix, decision)
 	}
+	c.triePtr.Store(next)
 }
 
 // GetBan returns the most specific matching IP or CIDR ban decision, if any.
@@ -85,14 +89,9 @@ func (c *Cache) GetBan(rawIP string) *models.Decision {
 		return nil
 	}
 
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	// Longest-prefix lookup: at most 33 IPv4 or 129 IPv6 hash lookups.
-	for bits := ip.BitLen(); bits >= 0; bits-- {
-		if decision := c.byPrefix[netip.PrefixFrom(ip, bits).Masked()]; decision != nil {
-			return decision
-		}
+	decision, present := c.triePtr.Load().Lookup(ip)
+	if present {
+		return decision
 	}
 	return nil
 }
