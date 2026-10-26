@@ -83,6 +83,40 @@ func BenchmarkUpdateSmallBlocklist(b *testing.B) {
 	}
 }
 
+// BenchmarkUpdateSteadyState applies many small deltas to an already large
+// cache. Each update adds a batch of new decisions and deletes the previous
+// batch, so the cache size stays constant.
+func BenchmarkUpdateSteadyState(b *testing.B) {
+	for _, batchSize := range []int{1, 10, 100} {
+		b.Run(fmt.Sprintf("batch=%d", batchSize), func(b *testing.B) {
+			c := largeBlocklistCache()
+
+			const batches = 512
+			pool := make([][]*models.Decision, batches)
+			id := int64(1_000_000)
+			for i := range pool {
+				pool[i] = make([]*models.Decision, batchSize)
+				for j := range pool[i] {
+					// 172.16.0.0/12 doesn't overlap the 10.x.x.x base blocklist.
+					n := int(id - 1_000_000)
+					pool[i][j] = decision(id, "ip", fmt.Sprintf("172.%d.%d.%d", 16+(n>>16)&15, (n>>8)&255, n&255), "ban")
+					id++
+				}
+			}
+
+			b.ResetTimer()
+			i := 0
+			for b.Loop() {
+				c.Apply(&models.DecisionsStreamResponse{
+					New:     pool[i%batches],
+					Deleted: pool[(i+batches-1)%batches],
+				})
+				i++
+			}
+		})
+	}
+}
+
 func BenchmarkUpdateGrowingBlocklist(b *testing.B) {
 	c := NewCache()
 	i := 0
