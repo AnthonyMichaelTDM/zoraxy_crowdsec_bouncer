@@ -8,18 +8,78 @@ import (
 	"github.com/crowdsecurity/crowdsec/pkg/models"
 )
 
-func BenchmarkLargeBlocklist(b *testing.B) {
+func largeBlocklistCache() *Cache {
 	c := NewCache()
-	update := &models.DecisionsStreamResponse{}
-	for i := 0; i < 100000; i++ {
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 100001)}
+	for i := range 100000 {
 		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
 	}
+	update.New = append(update.New, decision(100000, "range", "192.0.2.0/24", "ban"))
 	c.Apply(update)
+	return c
+}
+
+func BenchmarkLargeBlocklistExactIPHit(b *testing.B) {
+	c := largeBlocklistCache()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if c.GetBan("192.0.2.123") != nil {
+	for b.Loop() {
+		if c.GetBan("10.0.0.1") == nil {
+			b.Fatal("expected exact-IP ban")
+		}
+	}
+}
+
+func BenchmarkLargeBlocklistCIDRHit(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("192.0.2.123") == nil {
+			b.Fatal("expected CIDR ban")
+		}
+	}
+}
+
+func BenchmarkLargeBlocklistIPv4Miss(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("198.51.100.1") != nil {
 			b.Fatal("unexpected ban")
 		}
+	}
+}
+
+func BenchmarkLargeBlocklistIPv6Miss(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("2001:db8:ffff::1") != nil {
+			b.Fatal("unexpected ban")
+		}
+	}
+}
+
+func BenchmarkUpdateLargeBlocklist(b *testing.B) {
+	c := largeBlocklistCache()
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 1000)}
+	for i := range 10000 {
+		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		c.Apply(update)
+	}
+}
+
+func BenchmarkUpdateSmallBlocklist(b *testing.B) {
+	c := NewCache()
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 100)}
+	for i := range 100 {
+		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		c.Apply(update)
 	}
 }
 
