@@ -15,7 +15,7 @@ import (
 // When isProxiedBehindCloudflare is true, `CF-Connecting-IP` is checked FIRST:
 // Cloudflare always sets it and overwrites any client-supplied value, whereas
 // `X-Real-IP` is stripped from client requests by Cloudflare and so can only
-// come from a proxy sitting between Cloudflare and Zoraxy (e.g. a WAF) — which
+// come from a proxy sitting between Cloudflare and Zoraxy (e.g. a WAF), which
 // sets it to its own peer address, i.e. a Cloudflare edge IP, not the visitor.
 //
 // # Arguments:
@@ -31,8 +31,15 @@ func GetRealIP(logger *logrus.Logger, dsfr *zoraxy_plugin.DynamicSniffForwardReq
 		// Behind Cloudflare, CF-Connecting-IP is the only header Cloudflare
 		// guarantees; check it before X-Real-IP (see function comment).
 		if isProxiedBehindCloudflare {
-			if cfIP, err := ExtractHeader(headers, "CF-Connecting-IP", true); err == nil && cfIP != "" {
-				realIP = cfIP
+			// Check for CF-Connecting-IP header
+			CF_Connecting_IP, err := ExtractHeader(headers, "CF-Connecting-IP", isProxiedBehindCloudflare)
+			if err != nil && isProxiedBehindCloudflare {
+				logger.Debugf("GetRealIP failed to extract CF-Connecting-IP for request with UUID %s: %v", dsfr.GetRequestUUID(), err)
+			} else if CF_Connecting_IP == "" {
+				logger.Debugf("GetRealIP got an empty string for CF-Connecting-IP for request with UUID %s", dsfr.GetRequestUUID())
+			} else if CF_Connecting_IP != "" {
+				// Use CF Connecting IP
+				realIP = CF_Connecting_IP
 				goto IPFound
 			}
 		}
@@ -42,18 +49,6 @@ func GetRealIP(logger *logrus.Logger, dsfr *zoraxy_plugin.DynamicSniffForwardReq
 		if err == nil && X_Real_IP != "" {
 			// Use X-Real-IP header
 			realIP = X_Real_IP
-			goto IPFound
-		}
-
-		// Check for CF-Connecting-IP header
-		CF_Connecting_IP, err := ExtractHeader(headers, "CF-Connecting-IP", isProxiedBehindCloudflare)
-		if err != nil && isProxiedBehindCloudflare {
-			logger.Debugf("GetRealIP failed to extract CF-Connecting-IP for request with UUID %s: %v", dsfr.GetRequestUUID(), err)
-		} else if CF_Connecting_IP == "" {
-			logger.Debugf("GetRealIP got an empty string for CF-Connecting-IP for request with UUID %s", dsfr.GetRequestUUID())
-		} else if CF_Connecting_IP != "" {
-			// Use CF Connecting IP
-			realIP = CF_Connecting_IP
 			goto IPFound
 		}
 
