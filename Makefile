@@ -11,7 +11,7 @@ CROWDSEC_BOUNCER_NAME ?= zoraxy-crowdsec-bouncer-local
 .DEFAULT_GOAL := help
 
 .PHONY: help
-.PHONY: test vet
+.PHONY: test vet bench
 .PHONY: test-env-onboarding test-env-ready
 .PHONY: test-env-up test-env-down test-env-logs test-env-status
 .PHONY: test-env-dirs test-env-build test-env-restart-zoraxy
@@ -22,6 +22,7 @@ help:
 	@echo "Available targets:"
 	@echo "  make test                 - Run go test ./..."
 	@echo "  make vet                  - Run go vet ./..."
+	@echo "  make bench                - Run go test -bench ./..."
 	@echo "  make test-env-onboarding  - Build plugin + start compose + onboarding config (api_key unset)"
 	@echo "  make test-env-ready       - Build plugin + start compose + auto-create CrowdSec key + ready config"
 	@echo "  make test-env-up          - Build plugin and bring up compose stack"
@@ -34,6 +35,9 @@ test:
 
 vet:
 	go vet ./...
+
+bench:
+	go test ./... -bench . -benchmem
 
 test-env-onboarding: test-env-up test-env-config-onboarding test-env-zoraxy-config test-env-restart-zoraxy test-env-status
 
