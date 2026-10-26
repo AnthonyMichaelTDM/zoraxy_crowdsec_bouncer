@@ -83,6 +83,22 @@ func BenchmarkUpdateSmallBlocklist(b *testing.B) {
 	}
 }
 
+func BenchmarkUpdateGrowingBlocklist(b *testing.B) {
+	c := NewCache()
+	i := 0
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 1000)}
+		for j := 0; j < 1000; j++ {
+			update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+			i++
+		}
+		b.StartTimer()
+		c.Apply(update)
+	}
+}
+
 func TestIndexPreservesDecisionMatching(t *testing.T) {
 	c := NewCache()
 	ds := []*models.Decision{
@@ -110,7 +126,7 @@ func TestIndexPreservesDecisionMatching(t *testing.T) {
 				}
 			}
 			if got := c.GetBan(raw); got != want {
-				t.Fatalf("%s: got %v want %v", raw, got, want)
+				t.Fatalf("%s: got %v want %v", raw, *got, *want)
 			}
 		}
 	}
