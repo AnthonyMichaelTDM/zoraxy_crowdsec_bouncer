@@ -6,15 +6,12 @@ import (
 	"net/netip"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/crowdsecurity/crowdsec/pkg/models"
 	"github.com/gaissmai/bart"
 )
 
-// entry is the immutable trie value for one prefix. Old tries share entries
-// with new ones, so an entry and its slice must never be modified after being
-// stored.
+// entry is the trie value for one prefix.
 type entry struct {
 	best *models.Decision
 	// others holds the remaining decisions at the prefix, so the next-best one
@@ -23,24 +20,22 @@ type entry struct {
 	others []*models.Decision
 }
 
-// Cache applies decision stream updates and offers lock-free IP lookups.
+// Cache applies decision stream updates and offers concurrent-safe IP lookups.
 // CrowdSec sends deleted decisions as well as new decisions, so the cache can
 // retain its last known-good state while a later stream update temporarily
 // fails.
 type Cache struct {
-	// mu serializes writers; readers never take it.
-	mu sync.Mutex
+	// mu guards decisions and trie. Updates edit the trie in place under the
+	// write lock, so lookups block while an update is being applied.
+	mu sync.RWMutex
 	// decisions maps decision IDs to decisions, so a deleted or replaced ID
 	// can be removed from the prefix it was originally indexed under.
 	decisions map[int64]*models.Decision
-	// triePtr is the current trie; readers load it atomically.
-	triePtr atomic.Pointer[bart.Table[entry]]
+	trie      bart.Table[entry]
 }
 
 func NewCache() *Cache {
-	c := &Cache{decisions: make(map[int64]*models.Decision)}
-	c.triePtr.Store(new(bart.Table[entry]))
-	return c
+	return &Cache{decisions: make(map[int64]*models.Decision)}
 }
 
 func prefixFromDecision(decision *models.Decision) (netip.Prefix, bool) {
@@ -71,7 +66,7 @@ func better(a, b *models.Decision, addr netip.Addr) bool {
 
 // without returns a copy of list with the decision of the given ID removed.
 func without(list []*models.Decision, id int64) []*models.Decision {
-	var out []*models.Decision
+	var out []*models.Decision = make([]*models.Decision, 0, len(list))
 	for _, d := range list {
 		if d.ID != id {
 			out = append(out, d)
@@ -81,12 +76,12 @@ func without(list []*models.Decision, id int64) []*models.Decision {
 }
 
 // unindex removes the decision from its prefix in the trie.
-func unindex(trie *bart.Table[entry], decision *models.Decision) {
+func (c *Cache) unindex(decision *models.Decision) {
 	prefix, ok := prefixFromDecision(decision)
 	if !ok {
 		return
 	}
-	trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
+	c.trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
 		if !found {
 			return entry{}, true
 		}
@@ -107,12 +102,12 @@ func unindex(trie *bart.Table[entry], decision *models.Decision) {
 }
 
 // index adds the decision to its prefix in the trie.
-func index(trie *bart.Table[entry], decision *models.Decision) {
+func (c *Cache) index(decision *models.Decision) {
 	prefix, ok := prefixFromDecision(decision)
 	if !ok {
 		return
 	}
-	trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
+	c.trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
 		if !found {
 			return entry{best: decision}, false
 		}
@@ -120,10 +115,7 @@ func index(trie *bart.Table[entry], decision *models.Decision) {
 		if better(decision, old.best, prefix.Addr()) {
 			winner, loser = decision, old.best
 		}
-		others := make([]*models.Decision, 0, len(old.others)+1)
-		others = append(others, old.others...)
-		others = append(others, loser)
-		return entry{best: winner, others: others}, false
+		return entry{best: winner, others: append(old.others, loser)}, false
 	})
 }
 
@@ -135,15 +127,13 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	// One clone per update is far cheaper than persistent per-decision updates.
-	next := c.triePtr.Load().Clone()
 
 	for _, decision := range update.Deleted {
 		if decision == nil {
 			continue
 		}
 		if existing, ok := c.decisions[decision.ID]; ok {
-			unindex(next, existing)
+			c.unindex(existing)
 			delete(c.decisions, decision.ID)
 		}
 	}
@@ -153,12 +143,11 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 			continue
 		}
 		if existing, ok := c.decisions[decision.ID]; ok {
-			unindex(next, existing)
+			c.unindex(existing)
 		}
 		c.decisions[decision.ID] = decision
-		index(next, decision)
+		c.index(decision)
 	}
-	c.triePtr.Store(next)
 }
 
 // GetBan returns the most specific matching IP or CIDR ban decision, if any.
@@ -168,7 +157,9 @@ func (c *Cache) GetBan(rawIP string) *models.Decision {
 		return nil
 	}
 
-	if e, ok := c.triePtr.Load().Lookup(ip); ok {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if e, ok := c.trie.Lookup(ip); ok {
 		return e.best
 	}
 	return nil
