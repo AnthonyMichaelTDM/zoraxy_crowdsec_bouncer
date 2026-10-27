@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.4
+
+* chore(deps): bump github.com/sirupsen/logrus from 1.9.4 to 1.10.2 by @dependabot[bot] in https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/pull/46
+* fix(realip): prefer CF-Connecting-IP over X-Real-IP when behind Cloudflare by @BillyOne971 in https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/pull/54
+* fix: index CrowdSec decisions to avoid scanning the blocklist per request by @Joonas12334 in https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/pull/50
+* perf: replace prefix map with an incrementally updated prefix trie by @AnthonyMichaelTDM in https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/pull/55
+
 ## v1.2.3
 
 - Add pre-commit hooks and .introspect validation by @AnthonyMichaelTDM in #39.
