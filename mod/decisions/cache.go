@@ -116,7 +116,8 @@ func (c *Cache) unindex(decision *models.Decision) {
 				bestIdx = i + 1
 			}
 		}
-		return entry{best: old.others[bestIdx], others: removeAt(old.others, bestIdx)}, false
+		nextBest := old.others[bestIdx]
+		return entry{best: nextBest, others: removeAt(old.others, bestIdx)}, false
 	})
 }
 
