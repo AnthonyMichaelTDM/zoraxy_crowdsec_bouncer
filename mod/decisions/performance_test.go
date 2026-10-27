@@ -8,18 +8,128 @@ import (
 	"github.com/crowdsecurity/crowdsec/pkg/models"
 )
 
-func BenchmarkLargeBlocklist(b *testing.B) {
+func largeBlocklistCache() *Cache {
 	c := NewCache()
-	update := &models.DecisionsStreamResponse{}
-	for i := 0; i < 100000; i++ {
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 100001)}
+	for i := range 100000 {
 		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
 	}
+	update.New = append(update.New, decision(100000, "range", "192.0.2.0/24", "ban"))
 	c.Apply(update)
+	return c
+}
+
+func BenchmarkLargeBlocklistExactIPHit(b *testing.B) {
+	c := largeBlocklistCache()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if c.GetBan("192.0.2.123") != nil {
+	for b.Loop() {
+		if c.GetBan("10.0.0.1") == nil {
+			b.Fatal("expected exact-IP ban")
+		}
+	}
+}
+
+func BenchmarkLargeBlocklistCIDRHit(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("192.0.2.123") == nil {
+			b.Fatal("expected CIDR ban")
+		}
+	}
+}
+
+func BenchmarkLargeBlocklistIPv4Miss(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("198.51.100.1") != nil {
 			b.Fatal("unexpected ban")
 		}
+	}
+}
+
+func BenchmarkLargeBlocklistIPv6Miss(b *testing.B) {
+	c := largeBlocklistCache()
+	b.ResetTimer()
+	for b.Loop() {
+		if c.GetBan("2001:db8:ffff::1") != nil {
+			b.Fatal("unexpected ban")
+		}
+	}
+}
+
+func BenchmarkUpdateLargeBlocklist(b *testing.B) {
+	c := largeBlocklistCache()
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 1000)}
+	for i := range 10000 {
+		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		c.Apply(update)
+	}
+}
+
+func BenchmarkUpdateSmallBlocklist(b *testing.B) {
+	c := NewCache()
+	update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 100)}
+	for i := range 100 {
+		update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		c.Apply(update)
+	}
+}
+
+// BenchmarkUpdateSteadyState applies many small deltas to an already large
+// cache. Each update adds a batch of new decisions and deletes the previous
+// batch, so the cache size stays constant.
+func BenchmarkUpdateSteadyState(b *testing.B) {
+	for _, batchSize := range []int{1, 10, 100} {
+		b.Run(fmt.Sprintf("batch=%d", batchSize), func(b *testing.B) {
+			c := largeBlocklistCache()
+
+			const batches = 512
+			pool := make([][]*models.Decision, batches)
+			id := int64(1_000_000)
+			for i := range pool {
+				pool[i] = make([]*models.Decision, batchSize)
+				for j := range pool[i] {
+					// 172.16.0.0/12 doesn't overlap the 10.x.x.x base blocklist.
+					n := int(id - 1_000_000)
+					pool[i][j] = decision(id, "ip", fmt.Sprintf("172.%d.%d.%d", 16+(n>>16)&15, (n>>8)&255, n&255), "ban")
+					id++
+				}
+			}
+
+			b.ResetTimer()
+			i := 0
+			for b.Loop() {
+				c.Apply(&models.DecisionsStreamResponse{
+					New:     pool[i%batches],
+					Deleted: pool[(i+batches-1)%batches],
+				})
+				i++
+			}
+		})
+	}
+}
+
+func BenchmarkUpdateGrowingBlocklist(b *testing.B) {
+	c := NewCache()
+	i := 0
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		update := &models.DecisionsStreamResponse{New: make([]*models.Decision, 0, 1000)}
+		for j := 0; j < 1000; j++ {
+			update.New = append(update.New, decision(int64(i), "ip", fmt.Sprintf("10.%d.%d.%d", i>>16, (i>>8)&255, i&255), "ban"))
+			i++
+		}
+		b.StartTimer()
+		c.Apply(update)
 	}
 }
 
@@ -50,7 +160,7 @@ func TestIndexPreservesDecisionMatching(t *testing.T) {
 				}
 			}
 			if got := c.GetBan(raw); got != want {
-				t.Fatalf("%s: got %v want %v", raw, got, want)
+				t.Fatalf("%s: got %v want %v", raw, *got, *want)
 			}
 		}
 	}
@@ -58,5 +168,30 @@ func TestIndexPreservesDecisionMatching(t *testing.T) {
 	for _, d := range ds {
 		c.Apply(&models.DecisionsStreamResponse{Deleted: []*models.Decision{d}})
 		check()
+	}
+}
+
+func TestZonedIPv6DecisionIsIgnored(t *testing.T) {
+	c := NewCache()
+	c.Apply(&models.DecisionsStreamResponse{New: []*models.Decision{decision(1, "ip", "fe80::1%eth0", "ban")}})
+	if got := c.GetBan("fe80::1"); got != nil {
+		t.Fatalf("zoned decision must not ban the unzoned address, got %v", got)
+	}
+}
+
+// BenchmarkDeleteManySamePrefix deletes many decisions sharing one prefix in a
+// single update, the worst case for per-prefix candidate bookkeeping.
+func BenchmarkDeleteManySamePrefix(b *testing.B) {
+	const n = 10_000
+	ds := make([]*models.Decision, n)
+	for i := range ds {
+		ds[i] = decision(int64(i), "range", "198.51.100.0/24", "ban")
+	}
+	for b.Loop() {
+		b.StopTimer()
+		c := NewCache()
+		c.Apply(&models.DecisionsStreamResponse{New: ds})
+		b.StartTimer()
+		c.Apply(&models.DecisionsStreamResponse{Deleted: ds})
 	}
 }

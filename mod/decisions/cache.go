@@ -8,20 +8,135 @@ import (
 	"sync"
 
 	"github.com/crowdsecurity/crowdsec/pkg/models"
+	"github.com/gaissmai/bart"
 )
 
-// Cache applies decision stream updates and offers lock-safe IP lookups.
+// entry is the trie value for one prefix.
+type entry struct {
+	best *models.Decision
+	// others holds the remaining decisions at the prefix, so the next-best one
+	// can be promoted when the winner is removed. It is nil in the common case
+	// of a single decision.
+	others []*models.Decision
+}
+
+// Cache applies decision stream updates and offers concurrent-safe IP lookups.
 // CrowdSec sends deleted decisions as well as new decisions, so the cache can
 // retain its last known-good state while a later stream update temporarily
 // fails.
 type Cache struct {
-	mu        sync.RWMutex
+	// mu guards decisions and trie. Updates edit the trie in place under the
+	// write lock, so lookups block while an update is being applied.
+	mu sync.RWMutex
+	// decisions maps decision IDs to decisions, so a deleted or replaced ID
+	// can be removed from the prefix it was originally indexed under.
 	decisions map[int64]*models.Decision
-	byPrefix  map[netip.Prefix]*models.Decision
+	trie      bart.Table[entry]
 }
 
 func NewCache() *Cache {
 	return &Cache{decisions: make(map[int64]*models.Decision)}
+}
+
+func prefixFromDecision(decision *models.Decision) (netip.Prefix, bool) {
+	if decision == nil || decision.Value == nil || decision.Scope == nil {
+		return netip.Prefix{}, false
+	}
+	scope := strings.ToLower(*decision.Scope)
+	if scope != "ip" && scope != "range" {
+		return netip.Prefix{}, false
+	}
+	if ip, err := netip.ParseAddr(*decision.Value); err == nil && scope == "ip" {
+		// PrefixFrom drops the zone, which would make a zoned decision ban the
+		// unzoned address. decisionMatchSpecificity never matched those.
+		// Zoned decisions should never appear in practice
+		if ip.Zone() != "" {
+			return netip.Prefix{}, false
+		}
+		return netip.PrefixFrom(ip, ip.BitLen()), true
+	}
+	prefix, err := netip.ParsePrefix(*decision.Value)
+	if err != nil {
+		return netip.Prefix{}, false
+	}
+	return prefix.Masked(), true
+}
+
+// better reports whether a should win over b at the same prefix: higher
+// specificity first, then higher ID.
+func better(a, b *models.Decision, addr netip.Addr) bool {
+	aSpec, _ := decisionMatchSpecificity(a, addr)
+	bSpec, _ := decisionMatchSpecificity(b, addr)
+	return aSpec > bSpec || (aSpec == bSpec && a.ID > b.ID)
+}
+
+// removeAt removes list[i] in place by swapping in the last element. Order is
+// not preserved, which is fine because the winner is chosen by scanning. It is
+// safe because the trie is only touched under c.mu, so no reader or older
+// snapshot shares the slice.
+func removeAt(list []*models.Decision, i int) []*models.Decision {
+	last := len(list) - 1
+	list[i] = list[last]
+	list[last] = nil // don't retain the decision through the backing array
+	if last == 0 {
+		return nil
+	}
+	return list[:last]
+}
+
+// removeID removes the decision with the given ID from list, if present.
+func removeID(list []*models.Decision, id int64) []*models.Decision {
+	for i, d := range list {
+		if d.ID == id {
+			return removeAt(list, i)
+		}
+	}
+	return list
+}
+
+// unindex removes the decision from its prefix in the trie.
+func (c *Cache) unindex(decision *models.Decision) {
+	prefix, ok := prefixFromDecision(decision)
+	if !ok {
+		return
+	}
+	c.trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
+		if !found {
+			return entry{}, true
+		}
+		if old.best.ID != decision.ID {
+			return entry{best: old.best, others: removeID(old.others, decision.ID)}, false
+		}
+		if len(old.others) == 0 {
+			return entry{}, true
+		}
+		bestIdx := 0
+		for i, d := range old.others[1:] {
+			if better(d, old.others[bestIdx], prefix.Addr()) {
+				bestIdx = i + 1
+			}
+		}
+		nextBest := old.others[bestIdx]
+		return entry{best: nextBest, others: removeAt(old.others, bestIdx)}, false
+	})
+}
+
+// index adds the decision to its prefix in the trie.
+func (c *Cache) index(decision *models.Decision) {
+	prefix, ok := prefixFromDecision(decision)
+	if !ok {
+		return
+	}
+	c.trie.Modify(prefix, func(old entry, found bool) (entry, bool) {
+		if !found {
+			return entry{best: decision}, false
+		}
+		winner, loser := old.best, decision
+		if better(decision, old.best, prefix.Addr()) {
+			winner, loser = decision, old.best
+		}
+		return entry{best: winner, others: append(old.others, loser)}, false
+	})
 }
 
 // Apply updates the cache with one response from /v1/decisions/stream.
@@ -34,7 +149,11 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 	defer c.mu.Unlock()
 
 	for _, decision := range update.Deleted {
-		if decision != nil {
+		if decision == nil {
+			continue
+		}
+		if existing, ok := c.decisions[decision.ID]; ok {
+			c.unindex(existing)
 			delete(c.decisions, decision.ID)
 		}
 	}
@@ -43,38 +162,11 @@ func (c *Cache) Apply(update *models.DecisionsStreamResponse) {
 		if decision == nil || decision.Type == nil || !strings.EqualFold(*decision.Type, "ban") {
 			continue
 		}
+		if existing, ok := c.decisions[decision.ID]; ok {
+			c.unindex(existing)
+		}
 		c.decisions[decision.ID] = decision
-	}
-
-	// Parse once per stream update, not once per decision per HTTP request.
-	c.byPrefix = make(map[netip.Prefix]*models.Decision, len(c.decisions))
-	for _, d := range c.decisions {
-		if d.Scope == nil || d.Value == nil {
-			continue
-		}
-		var prefix netip.Prefix
-		if ip, err := netip.ParseAddr(*d.Value); err == nil && strings.EqualFold(*d.Scope, "ip") {
-			prefix = netip.PrefixFrom(ip, ip.BitLen())
-		} else {
-			var err error
-			prefix, err = netip.ParsePrefix(*d.Value)
-			if err != nil {
-				continue
-			}
-			prefix = prefix.Masked()
-		}
-		specificity, valid := decisionMatchSpecificity(d, prefix.Addr())
-		if !valid {
-			continue
-		}
-		previous := c.byPrefix[prefix]
-		if previous != nil {
-			previousSpecificity, _ := decisionMatchSpecificity(previous, prefix.Addr())
-			if previousSpecificity > specificity || (previousSpecificity == specificity && previous.ID > d.ID) {
-				continue
-			}
-		}
-		c.byPrefix[prefix] = d
+		c.index(decision)
 	}
 }
 
@@ -87,12 +179,8 @@ func (c *Cache) GetBan(rawIP string) *models.Decision {
 
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-
-	// Longest-prefix lookup: at most 33 IPv4 or 129 IPv6 hash lookups.
-	for bits := ip.BitLen(); bits >= 0; bits-- {
-		if decision := c.byPrefix[netip.PrefixFrom(ip, bits).Masked()]; decision != nil {
-			return decision
-		}
+	if e, ok := c.trie.Lookup(ip); ok {
+		return e.best
 	}
 	return nil
 }
