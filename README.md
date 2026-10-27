@@ -58,14 +58,14 @@ Then, copy the link to the latest binary from the [releases page](https://github
 ```bash
 cd /opt/zoraxy/plugins/zoraxycrowdsecbouncer
 # wget <LINK_TO_LATEST_BINARY>
-wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.2.2/zoraxycrowdsecbouncer
+wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.2.4/zoraxycrowdsecbouncer_linux_amd64 -O zoraxycrowdsecbouncer
 chmod +x zoraxycrowdsecbouncer
 ```
 
 Do the same for the `config.yaml` file:
 
 ```bash
-wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.2.2/config.yaml
+wget https://github.com/AnthonyMichaelTDM/zoraxy_crowdsec_bouncer/releases/download/v1.2.4/config.yaml
 ```
 
 ### From Source
