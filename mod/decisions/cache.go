@@ -64,15 +64,28 @@ func better(a, b *models.Decision, addr netip.Addr) bool {
 	return aSpec > bSpec || (aSpec == bSpec && a.ID > b.ID)
 }
 
-// without returns a copy of list with the decision of the given ID removed.
-func without(list []*models.Decision, id int64) []*models.Decision {
-	var out []*models.Decision = make([]*models.Decision, 0, len(list))
-	for _, d := range list {
-		if d.ID != id {
-			out = append(out, d)
+// removeAt removes list[i] in place by swapping in the last element. Order is
+// not preserved, which is fine because the winner is chosen by scanning. It is
+// safe because the trie is only touched under c.mu, so no reader or older
+// snapshot shares the slice.
+func removeAt(list []*models.Decision, i int) []*models.Decision {
+	last := len(list) - 1
+	list[i] = list[last]
+	list[last] = nil // don't retain the decision through the backing array
+	if last == 0 {
+		return nil
+	}
+	return list[:last]
+}
+
+// removeID removes the decision with the given ID from list, if present.
+func removeID(list []*models.Decision, id int64) []*models.Decision {
+	for i, d := range list {
+		if d.ID == id {
+			return removeAt(list, i)
 		}
 	}
-	return out
+	return list
 }
 
 // unindex removes the decision from its prefix in the trie.
@@ -86,18 +99,18 @@ func (c *Cache) unindex(decision *models.Decision) {
 			return entry{}, true
 		}
 		if old.best.ID != decision.ID {
-			return entry{best: old.best, others: without(old.others, decision.ID)}, false
+			return entry{best: old.best, others: removeID(old.others, decision.ID)}, false
 		}
 		if len(old.others) == 0 {
 			return entry{}, true
 		}
-		best := old.others[0]
-		for _, d := range old.others[1:] {
-			if better(d, best, prefix.Addr()) {
-				best = d
+		bestIdx := 0
+		for i, d := range old.others[1:] {
+			if better(d, old.others[bestIdx], prefix.Addr()) {
+				bestIdx = i + 1
 			}
 		}
-		return entry{best: best, others: without(old.others, best.ID)}, false
+		return entry{best: old.others[bestIdx], others: removeAt(old.others, bestIdx)}, false
 	})
 }
 

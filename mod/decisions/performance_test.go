@@ -170,3 +170,20 @@ func TestIndexPreservesDecisionMatching(t *testing.T) {
 		check()
 	}
 }
+
+// BenchmarkDeleteManySamePrefix deletes many decisions sharing one prefix in a
+// single update, the worst case for per-prefix candidate bookkeeping.
+func BenchmarkDeleteManySamePrefix(b *testing.B) {
+	const n = 10_000
+	ds := make([]*models.Decision, n)
+	for i := range ds {
+		ds[i] = decision(int64(i), "range", "198.51.100.0/24", "ban")
+	}
+	for b.Loop() {
+		b.StopTimer()
+		c := NewCache()
+		c.Apply(&models.DecisionsStreamResponse{New: ds})
+		b.StartTimer()
+		c.Apply(&models.DecisionsStreamResponse{Deleted: ds})
+	}
+}
