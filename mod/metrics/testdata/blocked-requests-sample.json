@@ -1,0 +1,26 @@
+[
+  {
+    "timestamp": "2026-08-11T14:40:00Z",
+    "hostname": "hassio.patking73.ch",
+    "origin": "crowdsec",
+    "count": 4
+  },
+  {
+    "timestamp": "2026-08-11T14:40:00Z",
+    "hostname": "pve2.patking73.ch",
+    "origin": "crowdsec",
+    "count": 4
+  },
+  {
+    "timestamp": "2026-08-11T14:40:00Z",
+    "hostname": "pve2.patking73.ch",
+    "origin": "cscli",
+    "count": 5
+  },
+  {
+    "timestamp": "2026-08-11T14:41:00Z",
+    "hostname": "pve2.patking73.ch",
+    "origin": "crowdsec",
+    "count": 5
+  }
+]

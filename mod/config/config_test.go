@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 )
 
 func TestPostProcessDefaultsStreamUpdateFrequency(t *testing.T) {
@@ -15,6 +17,22 @@ func TestPostProcessDefaultsStreamUpdateFrequency(t *testing.T) {
 	}
 	if pluginConfig.StreamUpdateFrequency != DefaultStreamUpdateFrequency {
 		t.Fatalf("StreamUpdateFrequency = %q, want %q", pluginConfig.StreamUpdateFrequency, DefaultStreamUpdateFrequency)
+	}
+	if pluginConfig.PrometheusListenAddr != "" {
+		t.Fatalf("PrometheusListenAddr = %q, want empty default", pluginConfig.PrometheusListenAddr)
+	}
+	if pluginConfig.BlockedRequestsAggregationFile != metrics.DefaultBlockedRequestsAggregationFile {
+		t.Fatalf("BlockedRequestsAggregationFile = %q, want %q", pluginConfig.BlockedRequestsAggregationFile, metrics.DefaultBlockedRequestsAggregationFile)
+	}
+}
+
+func TestPostProcessTrimsPrometheusListenAddress(t *testing.T) {
+	pluginConfig := PluginConfig{LogLevelString: "warning", PrometheusListenAddr: " :2112 "}
+	if err := pluginConfig.PostProcess(); err != nil {
+		t.Fatalf("PostProcess() error = %v", err)
+	}
+	if pluginConfig.PrometheusListenAddr != ":2112" {
+		t.Fatalf("PrometheusListenAddr = %q, want :2112", pluginConfig.PrometheusListenAddr)
 	}
 }
 
