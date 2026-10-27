@@ -47,6 +47,12 @@ func prefixFromDecision(decision *models.Decision) (netip.Prefix, bool) {
 		return netip.Prefix{}, false
 	}
 	if ip, err := netip.ParseAddr(*decision.Value); err == nil && scope == "ip" {
+		// PrefixFrom drops the zone, which would make a zoned decision ban the
+		// unzoned address. decisionMatchSpecificity never matched those.
+		// Zoned decisions should never appear in practice
+		if ip.Zone() != "" {
+			return netip.Prefix{}, false
+		}
 		return netip.PrefixFrom(ip, ip.BitLen()), true
 	}
 	prefix, err := netip.ParsePrefix(*decision.Value)

@@ -171,6 +171,14 @@ func TestIndexPreservesDecisionMatching(t *testing.T) {
 	}
 }
 
+func TestZonedIPv6DecisionIsIgnored(t *testing.T) {
+	c := NewCache()
+	c.Apply(&models.DecisionsStreamResponse{New: []*models.Decision{decision(1, "ip", "fe80::1%eth0", "ban")}})
+	if got := c.GetBan("fe80::1"); got != nil {
+		t.Fatalf("zoned decision must not ban the unzoned address, got %v", got)
+	}
+}
+
 // BenchmarkDeleteManySamePrefix deletes many decisions sharing one prefix in a
 // single update, the worst case for per-prefix candidate bookkeeping.
 func BenchmarkDeleteManySamePrefix(b *testing.B) {
