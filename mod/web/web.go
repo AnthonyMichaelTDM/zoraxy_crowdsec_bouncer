@@ -13,6 +13,7 @@ import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -112,13 +113,9 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			value := metric.GetGauge().GetValue()
+			value := metric.GetCounter().GetValue()
 
-			if metricName == string(metrics.DROPPED_REQUESTS) {
-				response.BlockedRequests[hostname] = value
-			} else if metricName == string(metrics.PROCESSED_REQUESTS) {
-				response.ProcessedRequests[hostname] = value
-			}
+			addMetricValue(&response, metricName, hostname, value)
 		}
 	}
 
@@ -140,6 +137,53 @@ func apiMetricsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+// addMetricValue aggregates the same hostname across all labels. Blocked
+// request counters also carry an origin label, so assigning instead of adding
+// would silently discard one of the origins.
+func addMetricValue(response *MetricsResponse, metricName, hostname string, value float64) {
+	if metricName == string(metrics.DROPPED_REQUESTS) {
+		response.BlockedRequests[hostname] += value
+	} else if metricName == string(metrics.PROCESSED_REQUESTS) {
+		response.ProcessedRequests[hostname] += value
+	}
+}
+
+// prometheusMetricsHandler exposes the registered bouncer metrics in the
+// Prometheus text exposition format. The plugin server listens on loopback, so
+// any route exposing this handler outside the host must be access-controlled.
+func prometheusMetricsHandler() http.Handler {
+	return prometheusMetricsHandlerFor(prometheus.DefaultGatherer)
+}
+
+func prometheusMetricsHandlerFor(gatherer prometheus.Gatherer) http.Handler {
+	return promhttp.HandlerFor(gatherer, promhttp.HandlerOpts{})
+}
+
+// StartPrometheusServer starts an optional dedicated listener for Prometheus.
+// Callers should bind it only to a trusted network interface.
+func StartPrometheusServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context, listenAddr string) {
+	if listenAddr == "" {
+		return
+	}
+
+	server := &http.Server{
+		Addr:    listenAddr,
+		Handler: prometheusMetricsHandler(),
+	}
+
+	g.Go(func() error {
+		logger.Infof("Prometheus metrics available at http://%s/metrics", listenAddr)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			return fmt.Errorf("prometheus metrics server failed: %w", err)
+		}
+		return nil
+	})
+	g.Go(func() error {
+		<-ctx.Done()
+		return ShutdownWebServer(server, 30*time.Second)
+	})
 }
 
 func apiHeadersHandler(w http.ResponseWriter, r *http.Request) {
@@ -266,6 +310,7 @@ func InitWebServer(logger *logrus.Logger, g *errgroup.Group, ctx context.Context
 	// Add API endpoints
 	mux.HandleFunc(info.UI_PATH+"api/version", apiVersionHandler)
 	mux.HandleFunc(info.UI_PATH+"api/metrics", apiMetricsHandler)
+	mux.Handle(info.UI_PATH+"metrics", prometheusMetricsHandler())
 	mux.HandleFunc(info.UI_PATH+"api/headers", apiHeadersHandler)
 	mux.HandleFunc(info.UI_PATH+"api/config-status", apiConfigStatusHandler)
 
