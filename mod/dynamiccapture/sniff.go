@@ -3,6 +3,7 @@ package dynamiccapture
 import (
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/config"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/decisions"
+	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/events"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/metrics"
 	"github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/utils"
 	plugin "github.com/AnthonyMichaelTDM/zoraxycrowdsecbouncer/mod/zoraxy_plugin"
@@ -13,7 +14,7 @@ import (
 // It is called for each request
 //
 // TODO: if/when we support captchas, we should maybe add a header to the request, or something
-func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler, config *config.PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, decisions *decisions.Cache) plugin.SniffResult {
+func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler, blockedEvents *events.BlockedEvents, config *config.PluginConfig, dsfr *plugin.DynamicSniffForwardRequest, decisions *decisions.Cache) plugin.SniffResult {
 	defer metricsHandler.MarkRequestProcessed(dsfr.Hostname)
 
 	// Look up the request IP in the local decision cache.
@@ -33,5 +34,6 @@ func SniffHandler(logger *logrus.Logger, metricsHandler *metrics.MetricsHandler,
 	// to the capture handler, which returns a forbidden response.
 	logger.Debugf("Decision found for IP: %s", ip)
 	metricsHandler.MarkRequestDropped(dsfr.Hostname, decision)
+	blockedEvents.Record(dsfr, ip, decision)
 	return plugin.SniffResultAccept // Accept the request to be handled by the Capture handler
 }
