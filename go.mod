@@ -8,10 +8,11 @@ require (
 	github.com/crowdsecurity/crowdsec v1.7.8
 	github.com/crowdsecurity/go-cs-bouncer v0.0.21
 	github.com/crowdsecurity/go-cs-lib v0.0.25
+	github.com/gaissmai/bart v0.30.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/sirupsen/logrus v1.10.2
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.25.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -21,7 +22,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
-	github.com/gaissmai/bart v0.30.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-openapi/analysis v0.26.0 // indirect
 	github.com/go-openapi/errors v0.22.8 // indirect
